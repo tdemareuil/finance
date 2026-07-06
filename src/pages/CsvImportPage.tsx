@@ -7,9 +7,12 @@ import {
   executeImport,
   GENERIC_COLUMNS,
   guessMapping,
+  isExcelFile,
   parseCsvFile,
+  parseFortuneoFile,
   REQUIRED_COLUMNS,
   type ColumnMapping,
+  type FortuneoParseResult,
   type GenericColumn,
   type ImportPreview,
   type ImportResult,
@@ -30,6 +33,8 @@ export default function CsvImportPage() {
   const { accounts, assets, transactions, reload } = usePortfolio()
   const [broker, setBroker] = useState<Broker>('AUTO')
   const [parsed, setParsed] = useState<ParsedCsv | null>(null)
+  const [fortuneo, setFortuneo] = useState<FortuneoParseResult | null>(null)
+  const [targetAccount, setTargetAccount] = useState('')
   const [fileName, setFileName] = useState('')
   const [mapping, setMapping] = useState<ColumnMapping>({})
   const [preview, setPreview] = useState<ImportPreview | null>(null)
@@ -45,6 +50,8 @@ export default function CsvImportPage() {
 
   function reset() {
     setParsed(null)
+    setFortuneo(null)
+    setTargetAccount('')
     setMapping({})
     setPreview(null)
     setResult(null)
@@ -52,19 +59,39 @@ export default function CsvImportPage() {
     setFileName('')
   }
 
+  function fortuneoPreview(res: FortuneoParseResult, accountName: string) {
+    const rows = res.parsed.rows.map((r) => ({ ...r, account: accountName }))
+    return buildImportPreview({ headers: res.parsed.headers, rows }, res.mapping, accounts, assets, transactions)
+  }
+
   async function handleFile(file: File) {
     reset()
     setBusy(true)
     try {
+      const useFortuneo = broker === 'FORTUNEO' || (isExcelFile(file) && broker !== 'GENERIC')
+      if (useFortuneo) {
+        const res = await parseFortuneoFile(file)
+        setFortuneo(res)
+        setFileName(file.name)
+        setDefaultAccountType(res.detectedAccountType)
+        setTargetAccount(res.detectedAccountName)
+        setPreview(fortuneoPreview(res, res.detectedAccountName))
+        return
+      }
       const p = await parseCsvFile(file)
       setParsed(p)
       setFileName(file.name)
       setMapping(guessMapping(p.headers))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Impossible de lire le fichier CSV.')
+      setError(e instanceof Error ? e.message : 'Impossible de lire le fichier.')
     } finally {
       setBusy(false)
     }
+  }
+
+  function changeTargetAccount(name: string) {
+    setTargetAccount(name)
+    if (fortuneo) setPreview(fortuneoPreview(fortuneo, name))
   }
 
   function updateMapping(col: GenericColumn, header: string) {
@@ -137,10 +164,10 @@ export default function CsvImportPage() {
             </select>
           </label>
           <label className="field">
-            <span>Fichier CSV</span>
+            <span>Fichier CSV ou Excel</span>
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".csv,text/csv,.xls,.xlsx"
               onChange={(e) => {
                 const f = e.target.files?.[0]
                 if (f) handleFile(f)
@@ -152,14 +179,24 @@ export default function CsvImportPage() {
           </button>
         </div>
         <p className="muted small">
-          Tous les formats sont importés via le moteur générique avec mapping manuel des colonnes.
-          {broker !== 'GENERIC' && broker !== 'AUTO' && ' Les en-têtes sont pré-mappés au mieux ; vérifiez le mapping ci-dessous.'}
+          <strong>Fortuneo</strong> : déposez l'export « portefeuille détaillé » (.xls) — mapping automatique.
+          {' '}<strong>Générique</strong> : CSV avec mapping manuel des colonnes.
         </p>
         {busy && !preview && <p className="muted">Lecture du fichier…</p>}
       </Card>
 
-      {/* Étape 2 : mapping */}
-      {parsed && (
+      {/* Aperçu Fortuneo : bandeau explicatif */}
+      {fortuneo && (
+        <div className="alert alert-info">
+          Export Fortuneo détecté — <strong>{fortuneo.positionCount} position(s)</strong>
+          {fortuneo.exportDate ? ` au ${fortuneo.exportDate}` : ''} ({fortuneo.detectedAccountType}).
+          Chaque ligne est importée comme un <strong>achat au prix de revient (PRU)</strong> daté du jour de l'export.
+          C'est un instantané : les dividendes, frais, ventes et dates d'achat réelles ne sont pas reconstitués.
+        </div>
+      )}
+
+      {/* Étape 2 : mapping (CSV générique uniquement) */}
+      {parsed && !fortuneo && (
         <Card title="2 · Mapping des colonnes" action={<span className="muted small">{parsed.rows.length} ligne(s), {parsed.headers.length} colonne(s)</span>}>
           <div className="mapping-grid">
             {GENERIC_COLUMNS.map((col) => (
@@ -206,6 +243,20 @@ export default function CsvImportPage() {
           )}
 
           <div className="import-options">
+            {fortuneo && (
+              <label className="field inline">
+                <span>Compte cible</span>
+                <input
+                  list="account-names"
+                  value={targetAccount}
+                  onChange={(e) => changeTargetAccount(e.target.value)}
+                  placeholder="Ex : PEA Fortuneo"
+                />
+                <datalist id="account-names">
+                  {accounts.map((a) => <option key={a.id} value={a.name} />)}
+                </datalist>
+              </label>
+            )}
             <label className="checkbox">
               <input type="checkbox" checked={autoCreateAccounts} onChange={(e) => setAutoCreateAccounts(e.target.checked)} />
               Créer automatiquement les comptes manquants
@@ -289,6 +340,10 @@ export default function CsvImportPage() {
           Dates ISO (AAAA-MM-JJ) ou JJ/MM/AAAA. Montants avec point ou virgule décimale.
         </p>
         <pre className="code-block">{sampleCsv}</pre>
+        <p className="muted small">
+          <strong>Fortuneo</strong> : sélectionnez le format « Fortuneo » (ou déposez directement le .xls) —
+          l'export « portefeuille détaillé » est reconnu automatiquement et chaque position devient un achat au PRU.
+        </p>
       </Card>
     </div>
   )

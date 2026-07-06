@@ -63,6 +63,143 @@ export function parseCsvFile(file: File): Promise<ParsedCsv> {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Import Fortuneo — "Export portefeuille détaillé" (.xls / .xlsx).
+// C'est un SNAPSHOT de positions (pas un historique de transactions). On le
+// convertit en une transaction BUY par ligne, au PRU réel, afin de reconstituer
+// les positions et le prix de revient. Les dividendes/frais/plus-values réalisées
+// et les dates d'achat réelles ne sont pas reconstitués (voir avertissement UI).
+// ---------------------------------------------------------------------------
+
+export interface FortuneoParseResult {
+  parsed: ParsedCsv
+  mapping: ColumnMapping
+  detectedAccountName: string
+  detectedAccountType: AccountType
+  exportDate: string | null
+  positionCount: number
+  skipped: number
+}
+
+const ACCOUNT_LABEL: Record<AccountType, string> = { CTO: 'CTO', PEA: 'PEA', LIVRET_PLUS: 'Livret+' }
+
+export function isExcelFile(file: File): boolean {
+  return /\.xlsx?$/i.test(file.name)
+}
+
+export async function parseFortuneoFile(file: File): Promise<FortuneoParseResult> {
+  const XLSX = await import('xlsx')
+  const buf = await file.arrayBuffer()
+  const wb = XLSX.read(buf, { type: 'array' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const grid = XLSX.utils.sheet_to_json<string[]>(ws, { header: 1, raw: false, defval: '' })
+
+  // Retire les accents (é → e) avant normalisation, sinon "Libellé"/"Qté" ne matchent pas.
+  const norm = (s: unknown) =>
+    String(s ?? '')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .replace(/[^a-z]/g, '')
+
+  const headerIdx = grid.findIndex(
+    (r) => r.some((c) => norm(c) === 'libelle') && r.some((c) => norm(c) === 'isin'),
+  )
+  if (headerIdx === -1) {
+    throw new Error(
+      "Format Fortuneo non reconnu : en-tête « Libellé … ISIN » introuvable. Vérifiez que c'est bien un export « portefeuille détaillé ».",
+    )
+  }
+  const header = grid[headerIdx].map((c) => String(c).trim())
+  const col = (name: string) => header.findIndex((h) => norm(h) === norm(name))
+  const iLib = col('Libellé')
+  const iDev = col('Dev')
+  const iQte = col('Qté')
+  const iPM = col('PM')
+  const iValo = col('Valorisation')
+  const iPV = header.findIndex((h) => norm(h) === norm('+/- values'))
+  const iIsin = col('ISIN')
+
+  // Type de compte + date d'export à partir des lignes d'en-tête.
+  const topText = grid.slice(0, headerIdx).flat().join(' ')
+  const detectedAccountType: AccountType = /pea/i.test(topText)
+    ? 'PEA'
+    : /livret/i.test(topText)
+      ? 'LIVRET_PLUS'
+      : 'CTO'
+  let exportDate: string | null = null
+  for (const r of grid.slice(0, headerIdx)) {
+    for (const c of r) {
+      const s = String(c)
+      if (/\d{2}\/\d{2}\/\d{4}/.test(s)) {
+        exportDate = parseDate(s)
+        break
+      }
+    }
+    if (exportDate) break
+  }
+  const dateForTx = exportDate ?? new Date().toISOString().slice(0, 10)
+  const accountName = `${ACCOUNT_LABEL[detectedAccountType]} Fortuneo`
+
+  const rows: Record<string, string>[] = []
+  let skipped = 0
+  for (let i = headerIdx + 1; i < grid.length; i++) {
+    const r = grid[i]
+    const lib = String(r[iLib] ?? '').trim()
+    // On saute les sous-totaux "Solde position CPT", la ligne "Total …" et les
+    // lignes vides. Le \b évite d'exclure des titres comme "TOTALENERGIES".
+    if (!lib || /^solde position/i.test(lib) || /^total\b/i.test(lib)) continue
+
+    const qte = parseNumber(String(r[iQte] ?? ''))
+    if (!qte || qte <= 0) {
+      skipped++
+      continue
+    }
+    const valo = parseNumber(String(r[iValo] ?? ''))
+    const pv = parseNumber(String(r[iPV] ?? '')) ?? 0
+
+    // Ticker = texte entre les dernières parenthèses ; "-" = pas de ticker.
+    const m = lib.match(/\(([^)]*)\)\s*$/)
+    let ticker = m ? m[1].trim() : ''
+    if (ticker === '-') ticker = ''
+    const name = m && m.index != null ? lib.slice(0, m.index).trim() : lib
+    const isin = String(r[iIsin] ?? '').trim()
+    const currency = String(r[iDev] ?? 'EUR').trim().toUpperCase() === 'USD' ? 'USD' : 'EUR'
+
+    // PRU précis : (valorisation − plus-value) / quantité. Fallback : colonne PM (arrondie).
+    let price: number | undefined
+    if (valo != null) price = Math.round(((valo - pv) / qte) * 10000) / 10000
+    else price = parseNumber(String(r[iPM] ?? ''))
+
+    rows.push({
+      date: dateForTx,
+      account: accountName,
+      type: 'BUY',
+      assetName: name,
+      ticker,
+      isin,
+      quantity: String(qte),
+      price: price != null ? String(price) : '',
+      fees: '',
+      amount: '',
+      currency,
+      note: `Import Fortuneo — position au ${exportDate ?? dateForTx}`,
+    })
+  }
+
+  const mapping: ColumnMapping = {}
+  for (const c of GENERIC_COLUMNS) mapping[c] = c
+  return {
+    parsed: { headers: [...GENERIC_COLUMNS], rows },
+    mapping,
+    detectedAccountName: accountName,
+    detectedAccountType,
+    exportDate,
+    positionCount: rows.length,
+    skipped,
+  }
+}
+
 /** Devine un mapping initial en rapprochant les en-têtes des colonnes génériques. */
 export function guessMapping(headers: string[]): ColumnMapping {
   const norm = (s: string) => s.toLowerCase().replace(/[^a-z]/g, '')

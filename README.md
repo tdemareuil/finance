@@ -24,6 +24,8 @@ accessible depuis plusieurs appareils).
 - CRUD complet : comptes, actifs, transactions
 - Import CSV générique : mapping des colonnes, aperçu, détection d'erreurs et de doublons,
   création automatique des comptes/actifs manquants, `ImportBatch`
+- Import **Fortuneo** (.xls « portefeuille détaillé ») : reconnu automatiquement, chaque
+  position devient un achat au **PRU réel** (calculé depuis valorisation − plus-value ÷ quantité)
 - Calcul des positions : quantité, **PRU** (prix de revient moyen pondéré), coût d'acquisition,
   plus-values latente et réalisée, dividendes, frais
 - Performance globale et annualisée, comparaison avec un benchmark **MSCI World**
@@ -145,6 +147,22 @@ date,account,type,assetName,ticker,isin,quantity,price,fees,amount,currency,note
 
 Un fichier d'exemple est téléchargeable directement depuis la page **Import CSV**.
 
+### Import Fortuneo (.xls)
+
+Depuis Fortuneo, exportez votre **« portefeuille détaillé »** (fichier `.xls`), puis
+déposez-le sur la page **Import CSV** (format *Fortuneo* ou *Auto-détection*). L'app :
+
+- reconnaît l'en-tête `Libellé … ISIN`, détecte le type de compte (PEA/CTO) et la date d'export ;
+- ignore les lignes de sous-total `Solde position CPT` ;
+- crée une transaction **BUY** par ligne, au **PRU exact** (recalculé, car la colonne `PM`
+  de Fortuneo est arrondie à l'entier) ;
+- vous laisse choisir le **compte cible** (existant ou nouveau).
+
+> ⚠️ C'est un **instantané de positions**, pas un historique : dividendes, frais, ventes
+> passées et dates d'achat réelles ne sont pas reconstitués (tous les achats sont datés du
+> jour de l'export). Pour un suivi de performance fidèle dans le temps, saisissez ensuite
+> les opérations réelles ou complétez via un CSV détaillé.
+
 ## 8. Limites connues du prototype
 
 - **Change EUR/USD fixe** : les montants USD sont convertis en EUR via un taux constant
@@ -158,7 +176,10 @@ Un fichier d'exemple est téléchargeable directement depuis la page **Import CS
 - **Mode démo** : stockage local (`localStorage`) à des fins de démonstration uniquement.
   La source de vérité reste Supabase une fois configuré.
 - Pas de connexion automatique aux brokers, pas de simulation « 0 frais » (hors périmètre).
-- Bundle non code-splitté (Recharts) : ~250 kB gzip, acceptable pour un prototype.
+- Bundle : le parsing Excel (`xlsx`/SheetJS) est chargé à la demande (chunk séparé) ;
+  le reste (~250 kB gzip, Recharts) n'est pas code-splitté — acceptable pour un prototype.
+- `xlsx@0.18.5` (npm) porte des advisories connues ; l'app ne parse que vos propres
+  fichiers de confiance. Pour durcir, migrer vers la version CDN de SheetJS.
 
 ## Structure du projet
 
