@@ -38,6 +38,7 @@ create table if not exists public.assets (
   country             text,
   trading_view_symbol text,
   eodhd_symbol        text,
+  finnhub_symbol      text,
   created_at          timestamptz not null default now()
 );
 

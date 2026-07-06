@@ -35,6 +35,7 @@ export interface Asset {
   country?: string
   tradingViewSymbol?: string
   eodhdSymbol?: string
+  finnhubSymbol?: string
   createdAt: string
 }
 
@@ -174,4 +175,78 @@ export interface DividendCalendarEntry {
   quantityHeld: number
   estimatedAmount: number
   status: 'PREVU' | 'RECU'
+}
+
+// ---------------------------------------------------------------------------
+// Analyse (analysisService — consensus, objectifs, news, fondamentaux).
+// Séparé des données de marché (marketDataService).
+// ---------------------------------------------------------------------------
+
+export type AnalystRating =
+  | 'STRONG_BUY'
+  | 'BUY'
+  | 'HOLD'
+  | 'SELL'
+  | 'STRONG_SELL'
+  | 'UNKNOWN'
+
+export interface AnalystConsensus {
+  assetId: string
+  symbol: string
+  period?: string
+  strongBuy: number
+  buy: number
+  hold: number
+  sell: number
+  strongSell: number
+  total: number
+  rating: AnalystRating
+  updatedAt: string
+}
+
+export interface PriceTarget {
+  assetId: string
+  symbol: string
+  targetHigh?: number
+  targetLow?: number
+  targetMean?: number
+  targetMedian?: number
+  currency?: string
+  updatedAt: string
+}
+
+export interface AnalystRecommendation {
+  assetId: string
+  symbol: string
+  period?: string
+  strongBuy: number
+  buy: number
+  hold: number
+  sell: number
+  strongSell: number
+}
+
+export interface CompanyNewsItem {
+  id: string
+  assetId: string
+  headline: string
+  source?: string
+  url?: string
+  datetime?: string
+  summary?: string
+  image?: string
+}
+
+export interface CompanyFundamentals {
+  assetId: string
+  symbol: string
+  marketCapitalization?: number
+  peNormalizedAnnual?: number
+  peBasicExclExtraTTM?: number
+  epsBasicExclExtraItemsTTM?: number
+  dividendYieldIndicatedAnnual?: number
+  beta?: number
+  week52High?: number
+  week52Low?: number
+  currency?: string
 }

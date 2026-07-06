@@ -32,7 +32,10 @@ accessible depuis plusieurs appareils).
 - Dashboard synthétique, évolution du patrimoine, allocations (compte / type / devise / secteur / pays)
 - Dividendes reçus par mois et par actif, rendement sur coût, calendrier des dividendes
 - Frais cumulés et frais par compte
-- Page détail d'un actif avec widget **TradingView** et historique de cours
+- Page détail d'un actif en **onglets** (Résumé, Performance, Analyse, Transactions, Dividendes)
+  avec widget **TradingView** et historique de cours
+- Onglet **Analyse** (via **Finnhub**) : consensus analystes, objectifs de cours, tendance des
+  recommandations, actualités récentes, fondamentaux clés — avec repli mock
 
 ---
 
@@ -54,6 +57,9 @@ npm install
    [`supabase/schema.sql`](supabase/schema.sql) et exécutez-le.
    Cela crée les tables, les index, active **Row Level Security** et crée les
    policies (chaque utilisateur ne voit/écrit que ses propres lignes).
+   - Si vous aviez déjà appliqué le schéma **avant** l'ajout de la section Analyse,
+     exécutez aussi [`supabase/migration_finnhub_symbol.sql`](supabase/migration_finnhub_symbol.sql)
+     (`alter table assets add column if not exists finnhub_symbol text;`).
 4. Dans *Authentication → Providers*, laissez **Email** activé.
    Pour tester rapidement, vous pouvez désactiver la confirmation email
    (*Authentication → Sign In / Providers → Confirm email*).
@@ -70,7 +76,8 @@ cp .env.example .env.local
 |---|---|---|
 | `VITE_SUPABASE_URL` | pour la persistance | URL du projet Supabase |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | pour la persistance | Clé **Publishable** (`sb_publishable_…`) |
-| `VITE_EODHD_API_KEY` | non | Clé EODHD ; **vide = mode mock** |
+| `VITE_EODHD_API_KEY` | non | Clé EODHD (cours) ; **vide = mode mock** |
+| `VITE_FINNHUB_API_KEY` | non | Clé Finnhub (analyse) ; **vide = mode mock** |
 | `VITE_DEFAULT_BENCHMARK` | non | Symbole benchmark (défaut `CW8.PA`) |
 | `VITE_BASE` | non | Base URL du build (défaut `/patrimoine-dashboard/`) |
 
@@ -106,8 +113,8 @@ déploie à chaque push sur `main`.
 
 1. Dans *Settings → Pages*, choisissez **Source: GitHub Actions**.
 2. Dans *Settings → Secrets and variables → Actions*, ajoutez les secrets
-   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, et éventuellement `VITE_EODHD_API_KEY`.
-   (Optionnel : variable `VITE_DEFAULT_BENCHMARK`.)
+   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, et éventuellement `VITE_EODHD_API_KEY`
+   et `VITE_FINNHUB_API_KEY`. (Optionnel : variable `VITE_DEFAULT_BENCHMARK`.)
 3. Poussez sur `main`. `VITE_BASE` est renseigné automatiquement avec `/<nom-du-repo>/`.
 
 > Le routing utilise `HashRouter` (`/#/dashboard`) : aucune configuration serveur SPA
@@ -163,7 +170,48 @@ déposez-le sur la page **Import CSV** (format *Fortuneo* ou *Auto-détection*).
 > jour de l'export). Pour un suivi de performance fidèle dans le temps, saisissez ensuite
 > les opérations réelles ou complétez via un CSV détaillé.
 
-## 8. Limites connues du prototype
+## 8. Données d'analyse (Finnhub)
+
+L'onglet **Analyse** de la page détail d'un actif utilise [Finnhub](https://finnhub.io)
+via `src/services/analysisService.ts` (strictement séparé de `marketDataService`, qui ne
+gère que cours / historiques / dividendes / splits).
+
+1. Créez un compte gratuit sur [finnhub.io](https://finnhub.io/register).
+2. Récupérez votre **API key** dans le dashboard Finnhub.
+3. Ajoutez-la dans `.env.local` :
+   ```env
+   VITE_FINNHUB_API_KEY=votre_cle_finnhub
+   ```
+   La clé n'est **jamais** committée (`.env.local` est gitignoré). Sans clé, la section
+   Analyse fonctionne avec des **données mock** (un bandeau l'indique).
+4. Renseignez le **symbole Finnhub** de chaque actif (page Actifs → champ « Symbole Finnhub »).
+   À défaut, le service utilise le `ticker`.
+
+**Exemples de symboles Finnhub :**
+
+| Actif | Symbole Finnhub |
+|---|---|
+| Apple (US) | `AAPL` |
+| Microsoft (US) | `MSFT` |
+| LVMH (Euronext Paris) | `MC.PA` |
+| ASML (Euronext Amsterdam) | `ASML.AS` |
+| SAP (Xetra) | `SAP.DE` |
+
+> Le format des marchés hors-US est `TICKER.SUFFIXE` (`.PA` Paris, `.AS` Amsterdam,
+> `.DE` Xetra, `.L` Londres…).
+
+**Limites du plan gratuit Finnhub :**
+
+- ~60 requêtes/minute. L'app met en cache les réponses **12 h** (LocalStorage) et ne charge
+  l'onglet Analyse qu'à la demande, pour limiter les appels.
+- L'endpoint **objectifs de cours** (`price-target`) est souvent réservé au plan payant :
+  il peut renvoyer vide, ce qui n'est pas traité comme une erreur.
+- Les données analystes peuvent être **absentes** pour certains titres, notamment les **ETF**
+  et les **petites capitalisations**. Pour un ETF, un message informatif est affiché (pas une erreur).
+
+> ⚠️ Données informatives uniquement, ne constituent pas un conseil financier.
+
+## 9. Limites connues du prototype
 
 - **Change EUR/USD fixe** : les montants USD sont convertis en EUR via un taux constant
   simplifié (`portfolioCalculator.ts`), pas de taux historique.
@@ -172,6 +220,12 @@ déposez-le sur la page **Import CSV** (format *Fortuneo* ou *Auto-détection*).
 - **Séries de valeur** : échantillonnées en fin de mois pour les graphiques.
 - **Données de marché mock** : déterministes mais fictives ; branchez EODHD pour du réel.
   L'app n'est jamais bloquée si EODHD échoue (repli automatique sur le mock).
+- **Données d'analyse (Finnhub)** : sans clé, données mock déterministes. Les objectifs de cours
+  sont souvent réservés au plan payant ; les données analystes peuvent manquer pour les ETF et
+  petites capitalisations. `marketDataService` et `analysisService` restent strictement séparés.
+- **Connexion** : la page de login propose uniquement l'authentification email/mot de passe
+  (pas de mode démo ni de création de compte en libre-service). Créez les comptes via Supabase
+  (dashboard *Authentication → Users*, ou activez l'inscription côté Supabase si souhaité).
 - **TradingView** nécessite une connexion internet (script externe).
 - **Mode démo** : stockage local (`localStorage`) à des fins de démonstration uniquement.
   La source de vérité reste Supabase une fois configuré.
@@ -192,8 +246,8 @@ src/
   services/     supabaseClient, dataMode, localStore, rowMappers,
                 accountService, assetService, transactionService,
                 dividendService, importBatchService, csvImportService,
-                marketDataService, portfolioCalculator, benchmarkService
-  data/         mockMarketData, demoData
+                marketDataService, analysisService, portfolioCalculator, benchmarkService
+  data/         mockMarketData, mockAnalysisData, demoData
   utils/        format, aggregations
   types/        index.ts
 supabase/       schema.sql (tables + RLS + policies)

@@ -34,19 +34,19 @@ export function buildDemoData(userId: string): {
       id: 'demo-ast-cw8', userId, name: 'Amundi MSCI World UCITS ETF', ticker: 'CW8',
       exchange: 'PA', isin: 'FR0010315770', currency: 'EUR', type: 'ETF',
       sector: 'Diversifié', country: 'Monde', tradingViewSymbol: 'EURONEXT:CW8',
-      eodhdSymbol: 'CW8.PA', createdAt: now,
+      eodhdSymbol: 'CW8.PA', finnhubSymbol: 'CW8.PA', createdAt: now,
     },
     {
       id: 'demo-ast-aapl', userId, name: 'Apple Inc.', ticker: 'AAPL',
       exchange: 'NASDAQ', isin: 'US0378331005', currency: 'USD', type: 'STOCK',
       sector: 'Technologie', country: 'États-Unis', tradingViewSymbol: 'NASDAQ:AAPL',
-      eodhdSymbol: 'AAPL.US', createdAt: now,
+      eodhdSymbol: 'AAPL.US', finnhubSymbol: 'AAPL', createdAt: now,
     },
     {
       id: 'demo-ast-mc', userId, name: 'LVMH', ticker: 'MC',
       exchange: 'PA', isin: 'FR0000121014', currency: 'EUR', type: 'STOCK',
       sector: 'Luxe', country: 'France', tradingViewSymbol: 'EURONEXT:MC',
-      eodhdSymbol: 'MC.PA', createdAt: now,
+      eodhdSymbol: 'MC.PA', finnhubSymbol: 'MC.PA', createdAt: now,
     },
   ]
 

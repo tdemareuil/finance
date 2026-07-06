@@ -4,23 +4,36 @@ import { usePortfolio } from '../context/PortfolioContext'
 import { Card, EmptyState, Loading, StatCard } from '../components/common/ui'
 import TradingViewWidget from '../components/assets/TradingViewWidget'
 import PriceLineChart from '../components/charts/PriceLineChart'
-import { getHistoricalPrices } from '../services/marketDataService'
-import type { MarketPrice } from '../types'
+import AssetAnalysis from '../components/assets/AssetAnalysis'
+import { getDividendEvents, getHistoricalPrices } from '../services/marketDataService'
+import type { DividendEvent, MarketPrice } from '../types'
 import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../utils/format'
 
 const TX_LABEL: Record<string, string> = {
   BUY: 'Achat', SELL: 'Vente', DIVIDEND: 'Dividende', FEE: 'Frais', DEPOSIT: 'Dépôt', WITHDRAWAL: 'Retrait',
 }
 
+type Tab = 'resume' | 'performance' | 'analyse' | 'transactions' | 'dividendes'
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'resume', label: 'Résumé' },
+  { key: 'performance', label: 'Performance' },
+  { key: 'analyse', label: 'Analyse' },
+  { key: 'transactions', label: 'Transactions' },
+  { key: 'dividendes', label: 'Dividendes' },
+]
+
 export default function AssetDetailPage() {
   const { assetId } = useParams()
   const { assets, positions, transactions, priceByAssetId, accounts, loading } = usePortfolio()
+  const [tab, setTab] = useState<Tab>('resume')
   const [history, setHistory] = useState<MarketPrice[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
+  const [divEvents, setDivEvents] = useState<DividendEvent[]>([])
 
   const asset = assets.find((a) => a.id === assetId)
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
 
+  // Historique de cours (onglet Performance) + événements de dividendes.
   useEffect(() => {
     let active = true
     async function run() {
@@ -35,6 +48,12 @@ export default function AssetDetailPage() {
         if (active) setHistory([])
       } finally {
         if (active) setHistoryLoading(false)
+      }
+      try {
+        const ev = await getDividendEvents(asset)
+        if (active) setDivEvents(ev)
+      } catch {
+        if (active) setDivEvents([])
       }
     }
     run()
@@ -64,6 +83,11 @@ export default function AssetDetailPage() {
   const perf = currentValue != null && totalCost > 0 ? (currentValue - totalCost) / totalCost : null
 
   const assetTx = transactions.filter((t) => t.assetId === asset.id)
+  const dividendTx = assetTx.filter((t) => t.type === 'DIVIDEND')
+  const today = new Date().toISOString().slice(0, 10)
+  const upcomingDiv = divEvents
+    .filter((e) => (e.paymentDate ?? e.exDate ?? '') >= today)
+    .sort((a, b) => ((a.paymentDate ?? a.exDate ?? '') < (b.paymentDate ?? b.exDate ?? '') ? -1 : 1))
 
   return (
     <div className="page">
@@ -87,50 +111,130 @@ export default function AssetDetailPage() {
         <StatCard label="Dividendes reçus" value={formatMoney(dividends, asset.currency)} tone="positive" />
       </div>
 
-      <Card title="Graphique TradingView">
-        {asset.tradingViewSymbol ? (
-          <TradingViewWidget symbol={asset.tradingViewSymbol} />
-        ) : (
-          <div className="alert alert-info">
-            Symbole TradingView non configuré pour cet actif.{' '}
-            <Link to="/assets">Ajoutez-le</Link> (champ « Symbole TradingView », ex : <code>NASDAQ:AAPL</code>).
+      {/* Onglets */}
+      <div className="tabs">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            className={`tab ${tab === t.key ? 'active' : ''}`}
+            onClick={() => setTab(t.key)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Résumé : graphique TradingView */}
+      {tab === 'resume' && (
+        <Card title="Graphique TradingView">
+          {asset.tradingViewSymbol ? (
+            <TradingViewWidget symbol={asset.tradingViewSymbol} />
+          ) : (
+            <div className="alert alert-info">
+              Symbole TradingView non configuré pour cet actif.{' '}
+              <Link to="/assets">Ajoutez-le</Link> (champ « Symbole TradingView », ex : <code>NASDAQ:AAPL</code>).
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Performance : cours + métriques */}
+      {tab === 'performance' && (
+        <Card title="Performance de la ligne (cours)">
+          {historyLoading ? <Loading label="Chargement des cours…" /> : <PriceLineChart prices={history} currency={asset.currency} />}
+          <div className="stat-grid" style={{ marginTop: 16 }}>
+            <StatCard label="Performance latente" value={formatPct(perf)} tone={signClass(perf) as never} />
+            <StatCard label="P&L latent" value={formatMoney(pnl, asset.currency)} tone={signClass(pnl) as never} />
+            <StatCard label="Coût d'acquisition" value={formatMoney(totalCost, asset.currency)} />
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
-      <Card title="Performance de la ligne (cours)">
-        {historyLoading ? <Loading label="Chargement des cours…" /> : <PriceLineChart prices={history} currency={asset.currency} />}
-      </Card>
+      {/* Analyse : consensus / objectifs / recommandations / news / fondamentaux */}
+      {tab === 'analyse' && <AssetAnalysis asset={asset} currentPrice={currentPrice} />}
 
-      <Card title="Historique des transactions">
-        {assetTx.length === 0 ? (
-          <p className="muted">Aucune transaction pour cet actif.</p>
-        ) : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Date</th><th>Type</th><th>Compte</th>
-                  <th className="num">Qté</th><th className="num">Prix</th><th className="num">Frais</th><th className="num">Montant</th>
-                </tr>
-              </thead>
-              <tbody>
-                {assetTx.map((t) => (
-                  <tr key={t.id}>
-                    <td>{formatDate(t.date)}</td>
-                    <td><span className={`chip chip-${t.type.toLowerCase()}`}>{TX_LABEL[t.type]}</span></td>
-                    <td>{accountName.get(t.accountId) ?? '—'}</td>
-                    <td className="num">{t.quantity != null ? formatNumber(t.quantity, 4) : '—'}</td>
-                    <td className="num">{t.price != null ? formatMoney(t.price, t.currency) : '—'}</td>
-                    <td className="num">{t.fees != null ? formatMoney(t.fees, t.currency) : '—'}</td>
-                    <td className="num">{t.amount != null ? formatMoney(t.amount, t.currency) : '—'}</td>
+      {/* Transactions */}
+      {tab === 'transactions' && (
+        <Card title="Historique des transactions">
+          {assetTx.length === 0 ? (
+            <p className="muted">Aucune transaction pour cet actif.</p>
+          ) : (
+            <div className="table-scroll">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Date</th><th>Type</th><th>Compte</th>
+                    <th className="num">Qté</th><th className="num">Prix</th><th className="num">Frais</th><th className="num">Montant</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+                </thead>
+                <tbody>
+                  {assetTx.map((t) => (
+                    <tr key={t.id}>
+                      <td>{formatDate(t.date)}</td>
+                      <td><span className={`chip chip-${t.type.toLowerCase()}`}>{TX_LABEL[t.type]}</span></td>
+                      <td>{accountName.get(t.accountId) ?? '—'}</td>
+                      <td className="num">{t.quantity != null ? formatNumber(t.quantity, 4) : '—'}</td>
+                      <td className="num">{t.price != null ? formatMoney(t.price, t.currency) : '—'}</td>
+                      <td className="num">{t.fees != null ? formatMoney(t.fees, t.currency) : '—'}</td>
+                      <td className="num">{t.amount != null ? formatMoney(t.amount, t.currency) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Dividendes */}
+      {tab === 'dividendes' && (
+        <>
+          <Card title="Dividendes reçus" action={<span className="muted small">Total : {formatMoney(dividends, asset.currency)}</span>}>
+            {dividendTx.length === 0 ? (
+              <p className="muted">Aucun dividende reçu enregistré pour cet actif.</p>
+            ) : (
+              <table className="table compact">
+                <thead>
+                  <tr><th>Date</th><th>Compte</th><th className="num">Montant</th><th>Note</th></tr>
+                </thead>
+                <tbody>
+                  {dividendTx.map((t) => (
+                    <tr key={t.id}>
+                      <td>{formatDate(t.date)}</td>
+                      <td>{accountName.get(t.accountId) ?? '—'}</td>
+                      <td className="num positive">{formatMoney(t.amount, t.currency)}</td>
+                      <td className="muted small">{t.note ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+
+          <Card title="Prochains dividendes">
+            {upcomingDiv.length === 0 ? (
+              <p className="muted">Aucun événement de dividende à venir connu pour cet actif.</p>
+            ) : (
+              <table className="table compact">
+                <thead>
+                  <tr><th>Ex-date</th><th>Paiement</th><th className="num">Montant / action</th><th className="num">Qté détenue</th><th className="num">Estimé</th></tr>
+                </thead>
+                <tbody>
+                  {upcomingDiv.map((e) => (
+                    <tr key={e.id}>
+                      <td>{formatDate(e.exDate)}</td>
+                      <td>{formatDate(e.paymentDate)}</td>
+                      <td className="num">{formatMoney(e.amountPerShare, e.currency)}</td>
+                      <td className="num">{formatNumber(quantity, 2)}</td>
+                      <td className="num">{formatMoney(quantity * e.amountPerShare, e.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </Card>
+        </>
+      )}
     </div>
   )
 }
