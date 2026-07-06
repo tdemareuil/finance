@@ -64,7 +64,7 @@ export default function LoginPage() {
 
   // Déjà connecté → dashboard (dans un effet, jamais pendant le rendu).
   useEffect(() => {
-    if (user) navigate('/dashboard', { replace: true })
+    if (user) navigate('/portfolio', { replace: true })
   }, [user, navigate])
 
   async function handleSubmit(e: FormEvent) {
@@ -73,7 +73,7 @@ export default function LoginPage() {
     setBusy(true)
     try {
       await signIn(email, password)
-      navigate('/dashboard')
+      navigate('/portfolio')
     } catch (err) {
       setError(describeSignInError(err))
     } finally {

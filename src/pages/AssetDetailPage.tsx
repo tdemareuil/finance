@@ -6,9 +6,12 @@ import TradingViewWidget from '../components/assets/TradingViewWidget'
 import PriceLineChart from '../components/charts/PriceLineChart'
 import AssetAnalysis from '../components/assets/AssetAnalysis'
 import { getDividends, getHistoricalPrices } from '../services/marketDataService'
+import { listRsuGrants } from '../services/rsuService'
+import { computeVestingSummary } from '../services/rsuCalculator'
 import { providerLabel } from '../services/providers/types'
-import type { DividendEvent, MarketPrice } from '../types'
+import type { DividendEvent, MarketPrice, RsuGrant } from '../types'
 import type { ProviderName } from '../services/providers/types'
+import { useAuth } from '../context/AuthContext'
 import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../utils/format'
 
 const TX_LABEL: Record<string, string> = {
@@ -26,6 +29,7 @@ const TABS: { key: Tab; label: string }[] = [
 
 export default function AssetDetailPage() {
   const { assetId } = useParams()
+  const { user } = useAuth()
   const { assets, positions, transactions, priceByAssetId, accounts, loading } = usePortfolio()
   const [tab, setTab] = useState<Tab>('resume')
   const [history, setHistory] = useState<MarketPrice[]>([])
@@ -34,6 +38,7 @@ export default function AssetDetailPage() {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [divEvents, setDivEvents] = useState<DividendEvent[]>([])
   const [divLoaded, setDivLoaded] = useState(false)
+  const [rsuGrants, setRsuGrants] = useState<RsuGrant[]>([])
 
   const asset = assets.find((a) => a.id === assetId)
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
@@ -66,6 +71,18 @@ export default function AssetDetailPage() {
     }
   }, [asset, tab, historyLoaded])
 
+  // Grants RSU de l'utilisateur (filtrés sur cet actif à l'affichage).
+  useEffect(() => {
+    if (!user) return
+    let active = true
+    listRsuGrants(user.id)
+      .then((g) => active && setRsuGrants(g))
+      .catch(() => active && setRsuGrants([]))
+    return () => {
+      active = false
+    }
+  }, [user])
+
   // Événements de dividendes : chargés à l'ouverture de l'onglet Dividendes.
   useEffect(() => {
     if (!asset || tab !== 'dividendes' || divLoaded) return
@@ -83,7 +100,7 @@ export default function AssetDetailPage() {
   if (!asset) {
     return (
       <div className="page">
-        <EmptyState title="Actif introuvable" hint={<Link to="/assets">Retour aux actifs</Link>} />
+        <EmptyState title="Actif introuvable" hint={<Link to="/portfolio">Retour au portefeuille</Link>} />
       </div>
     )
   }
@@ -101,6 +118,7 @@ export default function AssetDetailPage() {
 
   const assetTx = transactions.filter((t) => t.assetId === asset.id)
   const dividendTx = assetTx.filter((t) => t.type === 'DIVIDEND')
+  const assetGrants = rsuGrants.filter((g) => g.assetId === asset.id)
   const today = new Date().toISOString().slice(0, 10)
   const upcomingDiv = divEvents
     .filter((e) => (e.paymentDate ?? e.exDate ?? '') >= today)
@@ -110,7 +128,7 @@ export default function AssetDetailPage() {
     <div className="page">
       <div className="page-head">
         <div>
-          <Link to="/assets" className="back-link">← Actifs</Link>
+          <Link to="/portfolio" className="back-link">← Portefeuille</Link>
           <h1 className="page-title">{asset.name}</h1>
           <p className="muted">
             {asset.ticker}{asset.exchange ? `.${asset.exchange}` : ''} · {asset.type} · {asset.currency}
@@ -141,18 +159,58 @@ export default function AssetDetailPage() {
         ))}
       </div>
 
-      {/* Résumé : graphique TradingView */}
+      {/* Résumé : graphique TradingView + RSU */}
       {tab === 'resume' && (
-        <Card title="Graphique TradingView">
-          {asset.tradingViewSymbol ? (
-            <TradingViewWidget symbol={asset.tradingViewSymbol} />
-          ) : (
-            <div className="alert alert-info">
-              Symbole TradingView non configuré pour cet actif.{' '}
-              <Link to="/assets">Ajoutez-le</Link> (champ « Symbole TradingView », ex : <code>NASDAQ:AAPL</code>).
-            </div>
+        <>
+          <Card title="Graphique TradingView">
+            {asset.tradingViewSymbol ? (
+              <TradingViewWidget symbol={asset.tradingViewSymbol} />
+            ) : (
+              <div className="alert alert-info">
+                Symbole TradingView non configuré pour cet actif.{' '}
+                <Link to="/assets">Ajoutez-le</Link> (champ « Symbole TradingView », ex : <code>NASDAQ:AAPL</code>).
+              </div>
+            )}
+          </Card>
+
+          {assetGrants.length > 0 && (
+            <Card title="RSU · Vesting">
+              <div className="table-scroll">
+                <table className="table compact">
+                  <thead>
+                    <tr>
+                      <th>Attribution</th>
+                      <th>Plateforme</th>
+                      <th className="num">Actions</th>
+                      <th>Vesting</th>
+                      <th className="num">Acquises</th>
+                      <th>Prochaine livraison</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {assetGrants.map((g) => {
+                      const { vestedShares, nextEvent } = computeVestingSummary(g, today)
+                      return (
+                        <tr key={g.id}>
+                          <td>{formatDate(g.grantDate)}</td>
+                          <td><span className="chip chip-info">{g.platform}</span></td>
+                          <td className="num">{g.totalShares.toLocaleString('fr-FR')}</td>
+                          <td>{g.vestingType === 'cliff' ? 'Cliff' : `Mensuel · ${g.vestingMonths} mois`}</td>
+                          <td className="num">{vestedShares.toLocaleString('fr-FR')} / {g.totalShares.toLocaleString('fr-FR')}</td>
+                          <td>
+                            {nextEvent
+                              ? `${formatDate(nextEvent.date)} (+${nextEvent.shares.toLocaleString('fr-FR')})`
+                              : <span className="chip chip-positive">Terminé</span>}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           )}
-        </Card>
+        </>
       )}
 
       {/* Performance : cours + métriques */}

@@ -77,7 +77,7 @@ export default function SettingsPage() {
             )}
           </select>
         </label>
-        <p className="muted small">Utilisé pour la courbe comparative du Dashboard.</p>
+        <p className="muted small">Utilisé pour la courbe comparative du Portefeuille.</p>
         <button className="btn btn-sm" onClick={() => reload()}>Recalculer</button>
       </Card>
 

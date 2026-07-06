@@ -6,13 +6,8 @@ import { getTheme, setTheme, type Theme } from '../../utils/theme'
 import GlobalSearch from '../search/GlobalSearch'
 
 const NAV = [
-  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { to: '/portfolio', label: 'Portefeuille', icon: '📁' },
-  { to: '/transactions', label: 'Transactions', icon: '💸' },
-  { to: '/accounts', label: 'Comptes', icon: '🏦' },
-  { to: '/assets', label: 'Actifs', icon: '📈' },
+  { to: '/portfolio', label: 'Portefeuille', icon: '📊' },
   { to: '/dividends', label: 'Dividendes', icon: '💰' },
-  { to: '/rsu', label: 'RSU', icon: '🏷️' },
   { to: '/import', label: 'Import CSV', icon: '📥' },
   { to: '/settings', label: 'Paramètres', icon: '⚙️' },
 ]

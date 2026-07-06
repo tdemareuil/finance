@@ -2,7 +2,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import ProtectedRoute from './components/auth/ProtectedRoute'
 import Layout from './components/layout/Layout'
 import LoginPage from './pages/LoginPage'
-import DashboardPage from './pages/DashboardPage'
 import PortfolioPage from './pages/PortfolioPage'
 import TransactionsPage from './pages/TransactionsPage'
 import AccountsPage from './pages/AccountsPage'
@@ -24,8 +23,8 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/portfolio" element={<PortfolioPage />} />
+        <Route path="/dashboard" element={<Navigate to="/portfolio" replace />} />
         <Route path="/transactions" element={<TransactionsPage />} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/assets" element={<AssetsPage />} />
@@ -35,7 +34,7 @@ export default function App() {
         <Route path="/rsu" element={<RsuPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      <Route path="*" element={<Navigate to="/portfolio" replace />} />
     </Routes>
   )
 }
