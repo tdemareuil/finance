@@ -4,7 +4,10 @@ import { HashRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { PortfolioProvider } from './context/PortfolioContext'
+import { initTheme } from './utils/theme'
 import './index.css'
+
+initTheme()
 
 // HashRouter : compatible GitHub Pages (pas de configuration serveur pour le
 // routing SPA, les URLs sont de la forme /#/dashboard).

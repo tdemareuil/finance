@@ -8,11 +8,13 @@ import {
   GENERIC_COLUMNS,
   guessMapping,
   isExcelFile,
+  isTradeRepublicCsv,
   parseCsvFile,
   parseFortuneoFile,
+  parseTradeRepublicCsv,
   REQUIRED_COLUMNS,
+  type BrokerImportResult,
   type ColumnMapping,
-  type FortuneoParseResult,
   type GenericColumn,
   type ImportPreview,
   type ImportResult,
@@ -33,7 +35,7 @@ export default function CsvImportPage() {
   const { accounts, assets, transactions, reload } = usePortfolio()
   const [broker, setBroker] = useState<Broker>('AUTO')
   const [parsed, setParsed] = useState<ParsedCsv | null>(null)
-  const [fortuneo, setFortuneo] = useState<FortuneoParseResult | null>(null)
+  const [preset, setPreset] = useState<BrokerImportResult | null>(null)
   const [targetAccount, setTargetAccount] = useState('')
   const [fileName, setFileName] = useState('')
   const [mapping, setMapping] = useState<ColumnMapping>({})
@@ -50,7 +52,7 @@ export default function CsvImportPage() {
 
   function reset() {
     setParsed(null)
-    setFortuneo(null)
+    setPreset(null)
     setTargetAccount('')
     setMapping({})
     setPreview(null)
@@ -59,26 +61,34 @@ export default function CsvImportPage() {
     setFileName('')
   }
 
-  function fortuneoPreview(res: FortuneoParseResult, accountName: string) {
+  function presetPreview(res: BrokerImportResult, accountName: string) {
     const rows = res.parsed.rows.map((r) => ({ ...r, account: accountName }))
     return buildImportPreview({ headers: res.parsed.headers, rows }, res.mapping, accounts, assets, transactions)
+  }
+
+  function applyPreset(res: BrokerImportResult, file: File) {
+    setPreset(res)
+    setFileName(file.name)
+    setDefaultAccountType(res.detectedAccountType)
+    setTargetAccount(res.detectedAccountName)
+    setPreview(presetPreview(res, res.detectedAccountName))
   }
 
   async function handleFile(file: File) {
     reset()
     setBusy(true)
     try {
-      const useFortuneo = broker === 'FORTUNEO' || (isExcelFile(file) && broker !== 'GENERIC')
-      if (useFortuneo) {
-        const res = await parseFortuneoFile(file)
-        setFortuneo(res)
-        setFileName(file.name)
-        setDefaultAccountType(res.detectedAccountType)
-        setTargetAccount(res.detectedAccountName)
-        setPreview(fortuneoPreview(res, res.detectedAccountName))
+      // Fortuneo (.xls / format Fortuneo)
+      if (broker === 'FORTUNEO' || (isExcelFile(file) && broker !== 'GENERIC')) {
+        applyPreset(await parseFortuneoFile(file), file)
         return
       }
+      // CSV : Trade Republic (sélectionné ou auto-détecté) sinon générique.
       const p = await parseCsvFile(file)
+      if (broker === 'TRADE_REPUBLIC' || (broker === 'AUTO' && isTradeRepublicCsv(p.headers))) {
+        applyPreset(parseTradeRepublicCsv(p, 'CTO Trade Republic'), file)
+        return
+      }
       setParsed(p)
       setFileName(file.name)
       setMapping(guessMapping(p.headers))
@@ -91,7 +101,7 @@ export default function CsvImportPage() {
 
   function changeTargetAccount(name: string) {
     setTargetAccount(name)
-    if (fortuneo) setPreview(fortuneoPreview(fortuneo, name))
+    if (preset) setPreview(presetPreview(preset, name))
   }
 
   function updateMapping(col: GenericColumn, header: string) {
@@ -179,24 +189,18 @@ export default function CsvImportPage() {
           </button>
         </div>
         <p className="muted small">
-          <strong>Fortuneo</strong> : déposez l'export « portefeuille détaillé » (.xls) — mapping automatique.
+          <strong>Fortuneo</strong> : export « portefeuille détaillé » (.xls) — mapping automatique.
+          {' '}<strong>Trade Republic</strong> : export CSV de transactions — mapping automatique.
           {' '}<strong>Générique</strong> : CSV avec mapping manuel des colonnes.
         </p>
         {busy && !preview && <p className="muted">Lecture du fichier…</p>}
       </Card>
 
-      {/* Aperçu Fortuneo : bandeau explicatif */}
-      {fortuneo && (
-        <div className="alert alert-info">
-          Export Fortuneo détecté — <strong>{fortuneo.positionCount} position(s)</strong>
-          {fortuneo.exportDate ? ` au ${fortuneo.exportDate}` : ''} ({fortuneo.detectedAccountType}).
-          Chaque ligne est importée comme un <strong>achat au prix de revient (PRU)</strong> daté du jour de l'export.
-          C'est un instantané : les dividendes, frais, ventes et dates d'achat réelles ne sont pas reconstitués.
-        </div>
-      )}
+      {/* Preset broker (Fortuneo / Trade Republic) : bandeau explicatif */}
+      {preset && <div className="alert alert-info">{preset.note}</div>}
 
       {/* Étape 2 : mapping (CSV générique uniquement) */}
-      {parsed && !fortuneo && (
+      {parsed && !preset && (
         <Card title="2 · Mapping des colonnes" action={<span className="muted small">{parsed.rows.length} ligne(s), {parsed.headers.length} colonne(s)</span>}>
           <div className="mapping-grid">
             {GENERIC_COLUMNS.map((col) => (
@@ -243,7 +247,7 @@ export default function CsvImportPage() {
           )}
 
           <div className="import-options">
-            {fortuneo && (
+            {preset && (
               <label className="field inline">
                 <span>Compte cible</span>
                 <input
@@ -341,8 +345,11 @@ export default function CsvImportPage() {
         </p>
         <pre className="code-block">{sampleCsv}</pre>
         <p className="muted small">
-          <strong>Fortuneo</strong> : sélectionnez le format « Fortuneo » (ou déposez directement le .xls) —
-          l'export « portefeuille détaillé » est reconnu automatiquement et chaque position devient un achat au PRU.
+          <strong>Fortuneo</strong> : l'export « portefeuille détaillé » (.xls) est reconnu
+          automatiquement ; chaque position devient un achat au PRU (instantané).
+          <br />
+          <strong>Trade Republic</strong> : l'export CSV de transactions est reconnu automatiquement ;
+          chaque ligne (dépôt, achat/vente, dividende, intérêt, frais) devient une opération datée.
         </p>
       </Card>
     </div>

@@ -26,6 +26,9 @@ accessible depuis plusieurs appareils).
   création automatique des comptes/actifs manquants, `ImportBatch`
 - Import **Fortuneo** (.xls « portefeuille détaillé ») : reconnu automatiquement, chaque
   position devient un achat au **PRU réel** (calculé depuis valorisation − plus-value ÷ quantité)
+- Import **Trade Republic** (CSV de transactions) : reconnu automatiquement, historique réel
+  (dépôts/retraits, achats/ventes, dividendes, intérêts, frais), ISIN → rapprochement d'actifs
+- **Thème sombre par défaut** (bascule clair/sombre dans la barre supérieure, persistée)
 - Calcul des positions : quantité, **PRU** (prix de revient moyen pondéré), coût d'acquisition,
   plus-values latente et réalisée, dividendes, frais
 - Performance globale et annualisée, comparaison avec un benchmark **MSCI World**
@@ -177,6 +180,20 @@ déposez-le sur la page **Import CSV** (format *Fortuneo* ou *Auto-détection*).
 > passées et dates d'achat réelles ne sont pas reconstitués (tous les achats sont datés du
 > jour de l'export). Pour un suivi de performance fidèle dans le temps, saisissez ensuite
 > les opérations réelles ou complétez via un CSV détaillé.
+
+### Import Trade Republic (CSV)
+
+Depuis Trade Republic, exportez l'historique de transactions (« Exportation de transactions »,
+fichier `.csv`) et déposez-le (format *Trade Republic* ou *Auto-détection*). Contrairement à
+Fortuneo, c'est un **historique d'opérations** → il reconstitue fidèlement l'activité :
+
+- `TRANSFER_*_INBOUND` / `REFERRAL` / `INTEREST` → dépôts ; `*_OUTBOUND` → retraits ;
+- `BUY` / `SELL` (colonne `shares`/`price`, `fee`) → achats/ventes ;
+- `DIVIDEND` → dividendes.
+- La colonne `symbol` contient l'**ISIN** (utilisé pour rapprocher/créer les actifs) ; le
+  ticker n'est pas fourni par TR et peut être complété ensuite (utile pour Finnhub/TradingView).
+
+Vous choisissez le **compte cible** (par défaut « CTO Trade Republic »).
 
 ## 8. Données d'analyse (Finnhub)
 

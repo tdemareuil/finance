@@ -3,6 +3,7 @@ import type {
   Account,
   AccountType,
   Asset,
+  Broker,
   Currency,
   Transaction,
   TransactionType,
@@ -71,13 +72,16 @@ export function parseCsvFile(file: File): Promise<ParsedCsv> {
 // et les dates d'achat réelles ne sont pas reconstitués (voir avertissement UI).
 // ---------------------------------------------------------------------------
 
-export interface FortuneoParseResult {
+/** Résultat d'un import via preset broker (Fortuneo, Trade Republic…). */
+export interface BrokerImportResult {
+  broker: Broker
+  /** Message explicatif affiché au-dessus de l'aperçu. */
+  note: string
   parsed: ParsedCsv
   mapping: ColumnMapping
   detectedAccountName: string
   detectedAccountType: AccountType
-  exportDate: string | null
-  positionCount: number
+  count: number
   skipped: number
 }
 
@@ -87,7 +91,7 @@ export function isExcelFile(file: File): boolean {
   return /\.xlsx?$/i.test(file.name)
 }
 
-export async function parseFortuneoFile(file: File): Promise<FortuneoParseResult> {
+export async function parseFortuneoFile(file: File): Promise<BrokerImportResult> {
   const XLSX = await import('xlsx')
   const buf = await file.arrayBuffer()
   const wb = XLSX.read(buf, { type: 'array' })
@@ -190,12 +194,114 @@ export async function parseFortuneoFile(file: File): Promise<FortuneoParseResult
   const mapping: ColumnMapping = {}
   for (const c of GENERIC_COLUMNS) mapping[c] = c
   return {
+    broker: 'FORTUNEO',
+    note:
+      `Export Fortuneo détecté — ${rows.length} position(s)` +
+      `${exportDate ? ` au ${exportDate}` : ''} (${detectedAccountType}). ` +
+      `Chaque ligne est importée comme un achat au prix de revient (PRU) daté du jour de l'export. ` +
+      `Instantané : les dividendes, frais, ventes et dates d'achat réelles ne sont pas reconstitués.`,
     parsed: { headers: [...GENERIC_COLUMNS], rows },
     mapping,
     detectedAccountName: accountName,
     detectedAccountType,
-    exportDate,
-    positionCount: rows.length,
+    count: rows.length,
+    skipped,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Import Trade Republic — export CSV « Exportation de transactions ».
+// Historique d'opérations (dépôts, achats/ventes, dividendes, intérêts, frais…),
+// une ligne par transaction → reconstitution fidèle (contrairement à Fortuneo).
+// ---------------------------------------------------------------------------
+
+const TR_HEADERS = ['transaction_id', 'account_type', 'asset_class', 'shares', 'category']
+
+export function isTradeRepublicCsv(headers: string[]): boolean {
+  const set = new Set(headers.map((h) => h.trim().toLowerCase()))
+  const hits = TR_HEADERS.filter((h) => set.has(h)).length
+  return hits >= 3
+}
+
+function mapTradeRepublicType(
+  category: string,
+  type: string,
+  amount: number | undefined,
+  shares: number | undefined,
+): TransactionType | null {
+  const t = type.toUpperCase()
+  const c = category.toUpperCase()
+  if (t === 'BUY') return 'BUY'
+  if (t === 'SELL') return 'SELL'
+  if (t.includes('DIVIDEND')) return 'DIVIDEND'
+  if (c === 'TRADING' && shares) return (amount ?? 0) < 0 ? 'BUY' : 'SELL'
+  if (t.includes('INTEREST')) return 'DEPOSIT'
+  if (t.includes('OUTBOUND') || t.includes('WITHDRAWAL') || t.includes('PAYOUT')) return 'WITHDRAWAL'
+  if (
+    t.includes('INBOUND') ||
+    t.includes('DEPOSIT') ||
+    t.includes('REFERRAL') ||
+    t.includes('REWARD') ||
+    t.includes('SAVEBACK')
+  ) {
+    return 'DEPOSIT'
+  }
+  if (c === 'CASH' && amount != null) return amount >= 0 ? 'DEPOSIT' : 'WITHDRAWAL'
+  return null
+}
+
+export function parseTradeRepublicCsv(parsed: ParsedCsv, accountName: string): BrokerImportResult {
+  const rows: Record<string, string>[] = []
+  let skipped = 0
+
+  for (const raw of parsed.rows) {
+    const category = raw['category'] ?? ''
+    const rawType = raw['type'] ?? ''
+    const amount = parseNumber(raw['amount'])
+    const shares = parseNumber(raw['shares'])
+    const price = parseNumber(raw['price'])
+    const fee = parseNumber(raw['fee'])
+
+    const type = mapTradeRepublicType(category, rawType, amount, shares)
+    if (!type) {
+      skipped++
+      continue
+    }
+    const isTrade = type === 'BUY' || type === 'SELL'
+    const hasAsset = isTrade || type === 'DIVIDEND'
+    const date = (raw['date'] || (raw['datetime'] ?? '').slice(0, 10)).trim()
+    const currency = String(raw['currency'] ?? 'EUR').trim().toUpperCase() === 'USD' ? 'USD' : 'EUR'
+
+    rows.push({
+      date,
+      account: accountName,
+      type,
+      assetName: hasAsset ? (raw['name'] ?? '').trim() : '',
+      ticker: '',
+      // Trade Republic met l'ISIN dans la colonne "symbol".
+      isin: hasAsset ? (raw['symbol'] ?? '').trim() : '',
+      quantity: isTrade && shares != null ? String(Math.abs(shares)) : '',
+      price: isTrade && price != null ? String(price) : '',
+      fees: fee != null ? String(Math.abs(fee)) : '',
+      amount: !isTrade && amount != null ? String(Math.abs(amount)) : '',
+      currency,
+      note: (raw['description'] || rawType || '').trim().slice(0, 120),
+    })
+  }
+
+  const mapping: ColumnMapping = {}
+  for (const c of GENERIC_COLUMNS) mapping[c] = c
+  return {
+    broker: 'TRADE_REPUBLIC',
+    note:
+      `Export Trade Republic détecté — ${rows.length} opération(s). ` +
+      `Historique réel : dépôts/retraits, achats/ventes, dividendes, intérêts, frais. ` +
+      `L'ISIN sert à rapprocher/créer les actifs (le ticker peut être à compléter ensuite).`,
+    parsed: { headers: [...GENERIC_COLUMNS], rows },
+    mapping,
+    detectedAccountName: accountName,
+    detectedAccountType: 'CTO',
+    count: rows.length,
     skipped,
   }
 }

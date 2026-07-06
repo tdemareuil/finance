@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { usePortfolio } from '../../context/PortfolioContext'
+import { getTheme, setTheme, type Theme } from '../../utils/theme'
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -19,6 +20,13 @@ export default function Layout() {
   const { refreshing, reload, marketMode } = usePortfolio()
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [theme, setThemeState] = useState<Theme>(getTheme())
+
+  function toggleTheme() {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    setThemeState(next)
+  }
 
   async function handleSignOut() {
     await signOut()
@@ -61,6 +69,14 @@ export default function Layout() {
           </button>
           <div className="topbar-spacer" />
           <span className="topbar-user">{user?.email}</span>
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={toggleTheme}
+            aria-label="Basculer le thème"
+            title={theme === 'dark' ? 'Passer en mode clair' : 'Passer en mode sombre'}
+          >
+            {theme === 'dark' ? '☀️' : '🌙'}
+          </button>
           <button className="btn btn-sm" onClick={() => reload()} disabled={refreshing}>
             {refreshing ? 'Actualisation…' : '↻ Actualiser'}
           </button>
