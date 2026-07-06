@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { usePortfolio } from '../../context/PortfolioContext'
@@ -24,6 +24,16 @@ export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [theme, setThemeState] = useState<Theme>(getTheme())
 
+  // Fermer le volet mobile avec la touche Échap.
+  useEffect(() => {
+    if (!menuOpen) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [menuOpen])
+
   function toggleTheme() {
     const next: Theme = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
@@ -37,6 +47,13 @@ export default function Layout() {
 
   return (
     <div className="app-shell">
+      {menuOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setMenuOpen(false)}
+          aria-hidden
+        />
+      )}
       <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand">
           <span className="brand-icon">💰</span>
