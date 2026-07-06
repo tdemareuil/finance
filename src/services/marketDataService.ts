@@ -1,133 +1,50 @@
-import type { Asset, Currency, DividendEvent, MarketPrice } from '../types'
-import {
-  getMockDividendEvents,
-  getMockHistoricalPrices,
-  getMockLatestPrice,
-} from '../data/mockMarketData'
+import type { Asset, DividendEvent, MarketPrice, StockSplit } from '../types'
+import { fetchWithFallback } from './apiCacheService'
+import type { DataProvider, SourcedResult } from './providers/types'
+import { eodhdProvider } from './providers/eodhdProvider'
+import { fmpMarketDataProvider } from './providers/fmpProvider'
+import { mockMarketDataProvider } from './providers/mockProvider'
 
 // ---------------------------------------------------------------------------
-// Service de données de marché.
-// Deux modes :
-//   - MOCK (par défaut) : séries déterministes générées localement.
-//   - EODHD : si VITE_EODHD_API_KEY est fournie.
-// L'app ne doit jamais être bloquée si EODHD échoue : on retombe sur le mock.
-// La clé n'est JAMAIS hardcodée (lue depuis import.meta.env).
+// marketDataService — cours, historique, dividendes, splits.
+// Orchestrateur multi-provider (ne parle jamais directement à une API depuis un
+// composant). Ordre de fallback : EODHD → FMP → Mock.
+// STRICTEMENT séparé de analysisService.
 // ---------------------------------------------------------------------------
 
-const EODHD_KEY = (import.meta.env.VITE_EODHD_API_KEY as string | undefined)?.trim()
-const EODHD_BASE = 'https://eodhd.com/api'
+const MARKET_PROVIDERS: DataProvider[] = [eodhdProvider, fmpMarketDataProvider, mockMarketDataProvider]
 
-export const isEodhdConfigured = Boolean(EODHD_KEY)
-export type MarketDataMode = 'EODHD' | 'MOCK'
-export const marketDataMode: MarketDataMode = isEodhdConfigured ? 'EODHD' : 'MOCK'
+export const isEodhdConfigured = eodhdProvider.isEnabled()
+export const isFmpConfigured = fmpMarketDataProvider.isEnabled()
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10)
+export type MarketDataMode = 'EODHD' | 'FMP' | 'MOCK'
+export const marketDataMode: MarketDataMode = isEodhdConfigured
+  ? 'EODHD'
+  : isFmpConfigured
+    ? 'FMP'
+    : 'MOCK'
+
+export function getLatestPrice(asset: Asset): Promise<SourcedResult<MarketPrice>> {
+  return fetchWithFallback<MarketPrice>('LATEST_PRICE', asset, {}, MARKET_PROVIDERS)
 }
 
-/** Symbole EODHD à utiliser pour un actif (fallback : TICKER.EXCHANGE). */
-function symbolFor(asset: Asset): string {
-  if (asset.eodhdSymbol) return asset.eodhdSymbol
-  if (asset.exchange) return `${asset.ticker}.${asset.exchange}`
-  return asset.ticker
-}
-
-// --- Dernier prix ----------------------------------------------------------
-export async function getLatestPrice(asset: Asset): Promise<MarketPrice> {
-  const symbol = symbolFor(asset)
-  if (isEodhdConfigured) {
-    try {
-      const url = `${EODHD_BASE}/real-time/${encodeURIComponent(symbol)}?api_token=${EODHD_KEY}&fmt=json`
-      const res = await fetch(url)
-      if (res.ok) {
-        const json = (await res.json()) as { close?: number; timestamp?: number }
-        if (typeof json.close === 'number' && !Number.isNaN(json.close)) {
-          return { assetId: asset.id, date: today(), close: json.close, currency: asset.currency }
-        }
-      }
-    } catch {
-      /* fallback mock */
-    }
-  }
-  const p = getMockLatestPrice(symbol, today())
-  return { assetId: asset.id, date: p.date, close: p.close, currency: asset.currency }
-}
-
-// --- Historique ------------------------------------------------------------
-export async function getHistoricalPrices(
+export function getHistoricalPrices(
   asset: Asset,
   from: string,
   to: string,
-): Promise<MarketPrice[]> {
-  const symbol = symbolFor(asset)
-  if (isEodhdConfigured) {
-    try {
-      const url =
-        `${EODHD_BASE}/eod/${encodeURIComponent(symbol)}` +
-        `?api_token=${EODHD_KEY}&from=${from}&to=${to}&period=d&fmt=json`
-      const res = await fetch(url)
-      if (res.ok) {
-        const rows = (await res.json()) as Array<{ date: string; adjusted_close?: number; close?: number }>
-        if (Array.isArray(rows) && rows.length) {
-          return rows.map((r) => ({
-            assetId: asset.id,
-            date: r.date,
-            close: r.adjusted_close ?? r.close ?? 0,
-            currency: asset.currency,
-          }))
-        }
-      }
-    } catch {
-      /* fallback mock */
-    }
-  }
-  return getMockHistoricalPrices(symbol, from, to).map((p) => ({
-    assetId: asset.id,
-    date: p.date,
-    close: p.close,
-    currency: asset.currency,
-  }))
+): Promise<SourcedResult<MarketPrice[]>> {
+  return fetchWithFallback<MarketPrice[]>(
+    'HISTORICAL_PRICES',
+    asset,
+    { from, to, resolution: '1d' },
+    MARKET_PROVIDERS,
+  )
 }
 
-// --- Dividendes ------------------------------------------------------------
-export async function getDividendEvents(asset: Asset): Promise<DividendEvent[]> {
-  const symbol = symbolFor(asset)
-  const nowIso = new Date().toISOString()
-  if (isEodhdConfigured) {
-    try {
-      const from = new Date()
-      from.setFullYear(from.getFullYear() - 1)
-      const url =
-        `${EODHD_BASE}/div/${encodeURIComponent(symbol)}` +
-        `?api_token=${EODHD_KEY}&from=${from.toISOString().slice(0, 10)}&fmt=json`
-      const res = await fetch(url)
-      if (res.ok) {
-        const rows = (await res.json()) as Array<{ date: string; value: number; currency?: string; paymentDate?: string }>
-        if (Array.isArray(rows) && rows.length) {
-          return rows.map((r, i) => ({
-            id: `eodhd-${asset.id}-${i}`,
-            userId: asset.userId,
-            assetId: asset.id,
-            exDate: r.date,
-            paymentDate: r.paymentDate,
-            amountPerShare: r.value,
-            currency: (r.currency as Currency) ?? asset.currency,
-            createdAt: nowIso,
-          }))
-        }
-      }
-    } catch {
-      /* fallback mock */
-    }
-  }
-  return getMockDividendEvents(symbol, today()).map((d, i) => ({
-    id: `mock-${asset.id}-${i}`,
-    userId: asset.userId,
-    assetId: asset.id,
-    exDate: d.exDate,
-    paymentDate: d.paymentDate,
-    amountPerShare: d.amountPerShare,
-    currency: asset.currency,
-    createdAt: nowIso,
-  }))
+export function getDividends(asset: Asset): Promise<SourcedResult<DividendEvent[]>> {
+  return fetchWithFallback<DividendEvent[]>('DIVIDENDS', asset, {}, MARKET_PROVIDERS)
+}
+
+export function getSplits(asset: Asset): Promise<SourcedResult<StockSplit[]>> {
+  return fetchWithFallback<StockSplit[]>('SPLITS', asset, {}, MARKET_PROVIDERS)
 }

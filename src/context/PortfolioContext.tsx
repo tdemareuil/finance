@@ -136,8 +136,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
               return
             }
             try {
-              const p: MarketPrice = await getLatestPrice(a)
-              prices[a.id] = p.close
+              const { data } = await getLatestPrice(a)
+              prices[a.id] = data?.close ?? null
+              if (data == null) setMarketError('Certaines données de marché sont indisponibles.')
             } catch {
               prices[a.id] = null
               setMarketError('Certaines données de marché sont indisponibles.')
@@ -158,7 +159,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
                 .filter((a) => a.type !== 'CASH')
                 .map(async (a) => {
                   try {
-                    return [a.id, await getHistoricalPrices(a, first, today)] as const
+                    const { data } = await getHistoricalPrices(a, first, today)
+                    return [a.id, data ?? []] as const
                   } catch {
                     return [a.id, [] as MarketPrice[]] as const
                   }

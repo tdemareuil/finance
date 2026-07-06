@@ -98,6 +98,17 @@ export interface MarketPrice {
 }
 
 // ---------------------------------------------------------------------------
+// StockSplit (marketDataService — splits)
+// ---------------------------------------------------------------------------
+export interface StockSplit {
+  assetId: string
+  date: string
+  /** Ratio de split : numerator/denominator (ex : 4:1 → numerator 4, denominator 1). */
+  numerator: number
+  denominator: number
+}
+
+// ---------------------------------------------------------------------------
 // DividendEvent
 // ---------------------------------------------------------------------------
 export interface DividendEvent {

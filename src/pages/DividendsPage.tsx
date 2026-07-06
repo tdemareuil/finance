@@ -4,7 +4,7 @@ import { Card, EmptyState, Loading, StatCard } from '../components/common/ui'
 import MonthlyBarChart from '../components/charts/MonthlyBarChart'
 import AllocationPie from '../components/charts/AllocationPie'
 import { dividendsByAsset, dividendsByMonth } from '../utils/aggregations'
-import { getDividendEvents } from '../services/marketDataService'
+import { getDividends } from '../services/marketDataService'
 import type { DividendCalendarEntry, DividendEvent } from '../types'
 import { formatDate, formatMoney, formatNumber, formatPct } from '../utils/format'
 
@@ -27,7 +27,9 @@ export default function DividendsPage() {
     async function run() {
       setCalLoading(true)
       try {
-        const results = await Promise.all(heldAssets.map((a) => getDividendEvents(a).catch(() => [])))
+        const results = await Promise.all(
+          heldAssets.map((a) => getDividends(a).then((r) => r.data ?? []).catch(() => [])),
+        )
         if (active) setMarketEvents(results.flat())
       } finally {
         if (active) setCalLoading(false)

@@ -78,6 +78,7 @@ cp .env.example .env.local
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | pour la persistance | Clé **Publishable** (`sb_publishable_…`) |
 | `VITE_EODHD_API_KEY` | non | Clé EODHD (cours) ; **vide = mode mock** |
 | `VITE_FINNHUB_API_KEY` | non | Clé Finnhub (analyse) ; **vide = mode mock** |
+| `VITE_FMP_API_KEY` | non | Clé Financial Modeling Prep (**fallback** marché + analyse) ; vide = FMP désactivé |
 | `VITE_DEFAULT_BENCHMARK` | non | Symbole benchmark (défaut `CW8.PA`) |
 | `VITE_BASE` | non | Base URL du build (défaut `/patrimoine-dashboard/`) |
 
@@ -211,7 +212,57 @@ gère que cours / historiques / dividendes / splits).
 
 > ⚠️ Données informatives uniquement, ne constituent pas un conseil financier.
 
-## 9. Limites connues du prototype
+## 9. Providers de données & cache (fallback FMP)
+
+L'app utilise une architecture **multi-provider**. Les composants React n'appellent jamais
+une API directement : ils passent par `marketDataService` / `analysisService`, qui orchestrent
+les providers via `fetchWithFallback` (`src/services/apiCacheService.ts`).
+
+**Ordre de fallback** (on s'arrête dès qu'un provider renvoie une donnée valide) :
+
+| Service | Ordre des providers |
+|---|---|
+| `marketDataService` (cours, historique, dividendes, splits) | **EODHD → FMP → Mock** |
+| `analysisService` (consensus, objectifs, tendances, news, fondamentaux) | **Finnhub → FMP → Mock** |
+
+**Financial Modeling Prep (FMP)** est un provider **secondaire** (fallback) : ajoutez
+`VITE_FMP_API_KEY` (clé gratuite sur [financialmodelingprep.com](https://site.financialmodelingprep.com))
+pour l'activer. Sans clé, FMP est ignoré silencieusement. FMP n'est appelé que si le provider
+principal (EODHD ou Finnhub) n'a rien renvoyé de valide pour la donnée demandée.
+
+**Capabilities** : chaque provider déclare ce qu'il sait fournir (`LATEST_PRICE`,
+`HISTORICAL_PRICES`, `DIVIDENDS`, `SPLITS`, `ANALYST_CONSENSUS`, `PRICE_TARGET`,
+`RECOMMENDATION_TRENDS`, `NEWS`, `FUNDAMENTALS`). Un provider n'est jamais appelé pour une
+capacité qu'il ne supporte pas.
+
+**Stratégie anti-crédits** (`apiCacheService`) :
+
+- **Cache mémoire + LocalStorage** avec TTL par type de donnée.
+- Les **résultats vides** (`EMPTY`) et les **erreurs contrôlées** (`ERROR`, ex. endpoint payant
+  402/403, quota 429) sont **aussi mis en cache** — on ne redemande pas une donnée absente
+  pendant le TTL (erreurs : 1 h).
+- **Déduplication in-flight** : deux appels identiques simultanés partagent la même promesse
+  (une seule requête réseau).
+- **Rouvrir un actif ne relance aucun appel** tant que le cache est frais (clé de cache
+  déterministe `provider:capability:symbole:params`).
+- L'onglet **Analyse** et l'**historique** ne sont chargés qu'à l'ouverture de l'onglet concerné.
+
+**TTL par type de donnée :**
+
+| Donnée | TTL |
+|---|---|
+| Latest price | 15 min |
+| Historical prices | 24 h |
+| Dividends / Splits | 7 jours |
+| Analyst consensus / Price target / Recommendation trends | 24 h |
+| News | 6 h |
+| Fundamentals | 24 h |
+| Erreurs contrôlées | 1 h |
+
+La **source réellement utilisée** est affichée discrètement (« Source : Finnhub / FMP / EODHD /
+données de démonstration »). Un fallback réussi n'affiche jamais d'erreur.
+
+## 10. Limites connues du prototype
 
 - **Change EUR/USD fixe** : les montants USD sont convertis en EUR via un taux constant
   simplifié (`portfolioCalculator.ts`), pas de taux historique.
@@ -246,7 +297,9 @@ src/
   services/     supabaseClient, dataMode, localStore, rowMappers,
                 accountService, assetService, transactionService,
                 dividendService, importBatchService, csvImportService,
-                marketDataService, analysisService, portfolioCalculator, benchmarkService
+                marketDataService, analysisService, apiCacheService, consensus,
+                portfolioCalculator, benchmarkService
+    providers/  types, eodhdProvider, finnhubProvider, fmpProvider, mockProvider
   data/         mockMarketData, mockAnalysisData, demoData
   utils/        format, aggregations
   types/        index.ts

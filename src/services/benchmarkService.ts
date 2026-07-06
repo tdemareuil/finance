@@ -52,8 +52,8 @@ export async function computeBenchmarkSeries(
   const today = new Date().toISOString().slice(0, 10)
 
   const asset = buildBenchmarkAsset(symbol)
-  const prices = await getHistoricalPrices(asset, first, today)
-  if (prices.length === 0) return []
+  const { data: prices } = await getHistoricalPrices(asset, first, today)
+  if (!prices || prices.length === 0) return []
 
   // Flux nets (EUR) datés.
   const flows = transactions

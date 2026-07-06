@@ -9,14 +9,15 @@ import type {
   PriceTarget,
 } from '../../types'
 import {
-  analysisMode,
-  getAnalystConsensus,
-  getCompanyFundamentals,
-  getCompanyNews,
+  getConsensus,
+  getFundamentals,
+  getNews,
   getPriceTarget,
   getRecommendationTrends,
   isFinnhubConfigured,
+  isFmpConfigured,
 } from '../../services/analysisService'
+import { providerLabel, type ProviderName } from '../../services/providers/types'
 import { Card, Loading } from '../common/ui'
 import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../../utils/format'
 
@@ -52,6 +53,7 @@ interface State {
   trends: AnalystRecommendation[]
   news: CompanyNewsItem[]
   fundamentals: CompanyFundamentals | null
+  sources: (ProviderName | 'none')[]
 }
 
 export default function AssetAnalysis({
@@ -68,29 +70,46 @@ export default function AssetAnalysis({
     trends: [],
     news: [],
     fundamentals: null,
+    sources: [],
   })
 
   useEffect(() => {
     let active = true
     setState((s) => ({ ...s, loading: true }))
     ;(async () => {
+      const empty = { data: null, source: 'none' as const }
+      const emptyArr = { data: [], source: 'none' as const }
       const [consensus, target, trends, news, fundamentals] = await Promise.all([
-        getAnalystConsensus(asset).catch(() => null),
-        getPriceTarget(asset).catch(() => null),
-        getRecommendationTrends(asset).catch(() => []),
-        getCompanyNews(asset).catch(() => []),
-        getCompanyFundamentals(asset).catch(() => null),
+        getConsensus(asset).catch(() => empty),
+        getPriceTarget(asset).catch(() => empty),
+        getRecommendationTrends(asset).catch(() => emptyArr),
+        getNews(asset).catch(() => emptyArr),
+        getFundamentals(asset).catch(() => empty),
       ])
-      if (active) setState({ loading: false, consensus, target, trends, news, fundamentals })
+      if (!active) return
+      // Sources réellement utilisées (hors 'none'), pour l'affichage discret.
+      const sources = [consensus.source, target.source, trends.source, news.source, fundamentals.source]
+      setState({
+        loading: false,
+        consensus: consensus.data,
+        target: target.data,
+        trends: trends.data ?? [],
+        news: news.data ?? [],
+        fundamentals: fundamentals.data,
+        sources,
+      })
     })()
     return () => {
       active = false
     }
   }, [asset])
 
-  const { loading, consensus, target, trends, news, fundamentals } = state
+  const { loading, consensus, target, trends, news, fundamentals, sources } = state
   const isEtf = asset.type === 'ETF'
   const noFinnhubSymbol = !asset.finnhubSymbol?.trim()
+  const usedSources = [...new Set(sources.filter((s) => s !== 'none'))] as ProviderName[]
+  const anyMock = usedSources.includes('mock')
+  const noAnalysisKey = !isFinnhubConfigured && !isFmpConfigured
 
   const potential =
     target?.targetMean != null && currentPrice != null && currentPrice > 0
@@ -99,11 +118,15 @@ export default function AssetAnalysis({
 
   return (
     <div className="page">
-      {!isFinnhubConfigured && (
+      {noAnalysisKey && (
         <div className="alert alert-warn">
-          Clé Finnhub non configurée — <strong>données d'analyse simulées</strong> (démonstration).
-          Renseignez <code>VITE_FINNHUB_API_KEY</code> dans <code>.env.local</code> pour des données réelles.
+          Aucune clé d'analyse configurée (Finnhub / FMP) — <strong>données simulées</strong> (démonstration).
+          Renseignez <code>VITE_FINNHUB_API_KEY</code> ou <code>VITE_FMP_API_KEY</code> dans <code>.env.local</code>.
         </div>
+      )}
+
+      {!loading && usedSources.length > 0 && (
+        <p className="muted small">Source : {usedSources.map(providerLabel).join(', ')}</p>
       )}
 
       {loading ? (
@@ -173,7 +196,7 @@ export default function AssetAnalysis({
             ) : (
               <p className="muted">
                 Objectifs de cours indisponibles pour cet actif
-                {isFinnhubConfigured ? ' (endpoint souvent réservé au plan payant Finnhub).' : '.'}
+                {!noAnalysisKey ? ' (endpoint souvent réservé au plan payant du provider).' : '.'}
               </p>
             )}
           </Card>
@@ -262,7 +285,7 @@ export default function AssetAnalysis({
           </Card>
 
           <p className="muted small disclaimer">
-            {analysisMode === 'MOCK' ? 'Données simulées. ' : 'Source : Finnhub. '}
+            {anyMock ? 'Certaines données sont simulées. ' : ''}
             Données informatives uniquement, ne constituent pas un conseil financier.
           </p>
         </>

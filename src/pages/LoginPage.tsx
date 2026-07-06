@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -10,10 +10,10 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Déjà connecté → dashboard.
-  if (user) {
-    navigate('/dashboard', { replace: true })
-  }
+  // Déjà connecté → dashboard (dans un effet, jamais pendant le rendu).
+  useEffect(() => {
+    if (user) navigate('/dashboard', { replace: true })
+  }, [user, navigate])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()

@@ -5,8 +5,10 @@ import { Card, EmptyState, Loading, StatCard } from '../components/common/ui'
 import TradingViewWidget from '../components/assets/TradingViewWidget'
 import PriceLineChart from '../components/charts/PriceLineChart'
 import AssetAnalysis from '../components/assets/AssetAnalysis'
-import { getDividendEvents, getHistoricalPrices } from '../services/marketDataService'
+import { getDividends, getHistoricalPrices } from '../services/marketDataService'
+import { providerLabel } from '../services/providers/types'
 import type { DividendEvent, MarketPrice } from '../types'
+import type { ProviderName } from '../services/providers/types'
 import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../utils/format'
 
 const TX_LABEL: Record<string, string> = {
@@ -27,40 +29,55 @@ export default function AssetDetailPage() {
   const { assets, positions, transactions, priceByAssetId, accounts, loading } = usePortfolio()
   const [tab, setTab] = useState<Tab>('resume')
   const [history, setHistory] = useState<MarketPrice[]>([])
-  const [historyLoading, setHistoryLoading] = useState(true)
+  const [historySource, setHistorySource] = useState<ProviderName | 'none'>('none')
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyLoaded, setHistoryLoaded] = useState(false)
   const [divEvents, setDivEvents] = useState<DividendEvent[]>([])
+  const [divLoaded, setDivLoaded] = useState(false)
 
   const asset = assets.find((a) => a.id === assetId)
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
 
-  // Historique de cours (onglet Performance) + événements de dividendes.
+  // Réinitialise le lazy-load quand on change d'actif.
   useEffect(() => {
+    setHistoryLoaded(false)
+    setDivLoaded(false)
+  }, [assetId])
+
+  // Historique de cours : chargé UNIQUEMENT à l'ouverture de l'onglet Performance
+  // (le cache évite tout rappel réseau si déjà frais).
+  useEffect(() => {
+    if (!asset || tab !== 'performance' || historyLoaded) return
     let active = true
-    async function run() {
-      if (!asset) return
-      setHistoryLoading(true)
-      const from = new Date()
-      from.setFullYear(from.getFullYear() - 2)
-      try {
-        const h = await getHistoricalPrices(asset, from.toISOString().slice(0, 10), new Date().toISOString().slice(0, 10))
-        if (active) setHistory(h)
-      } catch {
-        if (active) setHistory([])
-      } finally {
-        if (active) setHistoryLoading(false)
-      }
-      try {
-        const ev = await getDividendEvents(asset)
-        if (active) setDivEvents(ev)
-      } catch {
-        if (active) setDivEvents([])
-      }
-    }
-    run()
+    setHistoryLoading(true)
+    setHistoryLoaded(true)
+    const from = new Date()
+    from.setFullYear(from.getFullYear() - 2)
+    getHistoricalPrices(asset, from.toISOString().slice(0, 10), new Date().toISOString().slice(0, 10))
+      .then(({ data, source }) => {
+        if (!active) return
+        setHistory(data ?? [])
+        setHistorySource(source)
+      })
+      .catch(() => active && setHistory([]))
+      .finally(() => active && setHistoryLoading(false))
     return () => {
       active = false
     }
-  }, [asset])
+  }, [asset, tab, historyLoaded])
+
+  // Événements de dividendes : chargés à l'ouverture de l'onglet Dividendes.
+  useEffect(() => {
+    if (!asset || tab !== 'dividendes' || divLoaded) return
+    let active = true
+    setDivLoaded(true)
+    getDividends(asset)
+      .then(({ data }) => active && setDivEvents(data ?? []))
+      .catch(() => active && setDivEvents([]))
+    return () => {
+      active = false
+    }
+  }, [asset, tab, divLoaded])
 
   if (loading) return <Loading />
   if (!asset) {
@@ -140,7 +157,10 @@ export default function AssetDetailPage() {
 
       {/* Performance : cours + métriques */}
       {tab === 'performance' && (
-        <Card title="Performance de la ligne (cours)">
+        <Card
+          title="Performance de la ligne (cours)"
+          action={!historyLoading && historySource !== 'none' && <span className="muted small">Source : {providerLabel(historySource)}</span>}
+        >
           {historyLoading ? <Loading label="Chargement des cours…" /> : <PriceLineChart prices={history} currency={asset.currency} />}
           <div className="stat-grid" style={{ marginTop: 16 }}>
             <StatCard label="Performance latente" value={formatPct(perf)} tone={signClass(perf) as never} />

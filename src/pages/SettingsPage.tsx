@@ -2,8 +2,15 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { Card } from '../components/common/ui'
-import { isEodhdConfigured, marketDataMode } from '../services/marketDataService'
+import { isEodhdConfigured, isFmpConfigured, marketDataMode } from '../services/marketDataService'
+import { isFinnhubConfigured } from '../services/analysisService'
 import { clearDemoData, seedDemoData } from '../services/localStore'
+
+const MODE_LABEL: Record<string, string> = {
+  EODHD: 'EODHD (temps réel)',
+  FMP: 'FMP (fallback)',
+  MOCK: 'Mock (données fictives)',
+}
 
 const BENCHMARKS = [
   { symbol: 'CW8.PA', label: 'Amundi MSCI World (CW8.PA, EUR)' },
@@ -45,17 +52,19 @@ export default function SettingsPage() {
         <button className="btn btn-danger-ghost" onClick={handleSignOut}>Se déconnecter</button>
       </Card>
 
-      <Card title="Données de marché (EODHD)">
+      <Card title="Providers de données">
         <ul className="kv-list">
-          <li><span>Mode actuel</span><strong>{marketDataMode === 'EODHD' ? 'EODHD (temps réel)' : 'Mock (données fictives)'}</strong></li>
-          <li><span>Clé EODHD</span><strong>{isEodhdConfigured ? 'Détectée' : 'Absente'}</strong></li>
+          <li><span>Données de marché (source principale)</span><strong>{MODE_LABEL[marketDataMode]}</strong></li>
+          <li><span>EODHD (marché)</span><strong>{isEodhdConfigured ? 'Détectée' : 'Absente'}</strong></li>
+          <li><span>Finnhub (analyse)</span><strong>{isFinnhubConfigured ? 'Détectée' : 'Absente'}</strong></li>
+          <li><span>FMP (fallback marché + analyse)</span><strong>{isFmpConfigured ? 'Détectée' : 'Absente'}</strong></li>
         </ul>
-        {!isEodhdConfigured && (
-          <p className="muted small">
-            Pour activer les cours réels, renseignez <code>VITE_EODHD_API_KEY</code> dans <code>.env.local</code>.
-            La clé n'est jamais stockée dans le dépôt. Sans clé, l'application utilise des données de marché fictives.
-          </p>
-        )}
+        <p className="muted small">
+          Ordre de fallback — marché : EODHD → FMP → mock ; analyse : Finnhub → FMP → mock.
+          Les clés se renseignent dans <code>.env.local</code> (jamais committées). Sans clé, des données
+          fictives déterministes sont utilisées. Les résultats (y compris vides) sont mis en cache pour
+          éviter les appels répétés.
+        </p>
       </Card>
 
       <Card title="Benchmark MSCI World">
