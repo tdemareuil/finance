@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { usePortfolio } from '../../context/PortfolioContext'
 import { getTheme, setTheme, type Theme } from '../../utils/theme'
+import GlobalSearch from '../search/GlobalSearch'
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -68,6 +69,7 @@ export default function Layout() {
           <button className="btn btn-ghost btn-icon menu-toggle" onClick={() => setMenuOpen((v) => !v)} aria-label="Menu">
             ☰
           </button>
+          <GlobalSearch />
           <div className="topbar-spacer" />
           <span className="topbar-user">{user?.email}</span>
           <button
