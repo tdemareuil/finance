@@ -499,7 +499,8 @@ input:focus, select:focus, textarea:focus {
    ===================================================================== */
 @media (max-width: 860px) {
   .sidebar {
-    position: fixed; z-index: 50; left: 0; top: 0;
+    position: fixed; z-index: 50; left: 0; top: 0; bottom: 0;
+    height: auto; overflow-y: auto;
     transform: translateX(-100%); transition: transform 0.2s;
     box-shadow: var(--shadow-lg);
   }

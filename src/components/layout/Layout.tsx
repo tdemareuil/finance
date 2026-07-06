@@ -83,7 +83,6 @@ export default function Layout() {
           </button>
           <GlobalSearch />
           <div className="topbar-spacer" />
-          <span className="topbar-user">{user?.email}</span>
           <button
             className="btn btn-ghost btn-icon"
             onClick={toggleTheme}
