@@ -8,9 +8,11 @@ import {
   GENERIC_COLUMNS,
   guessMapping,
   isExcelFile,
+  isFortuneoHistoryCsv,
   isTradeRepublicCsv,
   parseCsvFile,
   parseFortuneoFile,
+  parseFortuneoHistoryCsv,
   parseTradeRepublicCsv,
   REQUIRED_COLUMNS,
   type BrokerImportResult,
@@ -78,17 +80,23 @@ export default function CsvImportPage() {
     reset()
     setBusy(true)
     try {
-      // Fortuneo (.xls / format Fortuneo)
-      if (broker === 'FORTUNEO' || (isExcelFile(file) && broker !== 'GENERIC')) {
+      // Fortuneo .xls (instantané de positions)
+      if (isExcelFile(file) && broker !== 'GENERIC') {
         applyPreset(await parseFortuneoFile(file), file)
         return
       }
-      // CSV : Trade Republic (sélectionné ou auto-détecté) sinon générique.
       const p = await parseCsvFile(file)
+      // Fortuneo CSV (historique des opérations)
+      if (broker === 'FORTUNEO' || (broker === 'AUTO' && isFortuneoHistoryCsv(p.headers))) {
+        applyPreset(parseFortuneoHistoryCsv(p, 'PEA Fortuneo'), file)
+        return
+      }
+      // Trade Republic (CSV de transactions)
       if (broker === 'TRADE_REPUBLIC' || (broker === 'AUTO' && isTradeRepublicCsv(p.headers))) {
         applyPreset(parseTradeRepublicCsv(p, 'CTO Trade Republic'), file)
         return
       }
+      // Générique : mapping manuel
       setParsed(p)
       setFileName(file.name)
       setMapping(guessMapping(p.headers))
@@ -189,7 +197,8 @@ export default function CsvImportPage() {
           </button>
         </div>
         <p className="muted small">
-          <strong>Fortuneo</strong> : export « portefeuille détaillé » (.xls) — mapping automatique.
+          <strong>Fortuneo</strong> : « portefeuille détaillé » (.xls, positions) ou « historique
+          des opérations » (.csv) — mapping automatique.
           {' '}<strong>Trade Republic</strong> : export CSV de transactions — mapping automatique.
           {' '}<strong>Générique</strong> : CSV avec mapping manuel des colonnes.
         </p>

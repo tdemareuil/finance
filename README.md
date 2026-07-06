@@ -24,8 +24,8 @@ accessible depuis plusieurs appareils).
 - CRUD complet : comptes, actifs, transactions
 - Import CSV générique : mapping des colonnes, aperçu, détection d'erreurs et de doublons,
   création automatique des comptes/actifs manquants, `ImportBatch`
-- Import **Fortuneo** (.xls « portefeuille détaillé ») : reconnu automatiquement, chaque
-  position devient un achat au **PRU réel** (calculé depuis valorisation − plus-value ÷ quantité)
+- Import **Fortuneo** : instantané `.xls` (positions → achat au **PRU réel**) **ou** historique
+  `.csv` des opérations (achats/ventes/coupons/taxes, encodage Windows-1252 géré)
 - Import **Trade Republic** (CSV de transactions) : reconnu automatiquement, historique réel
   (dépôts/retraits, achats/ventes, dividendes, intérêts, frais), ISIN → rapprochement d'actifs
 - **Thème sombre par défaut** (bascule clair/sombre dans la barre supérieure, persistée)
@@ -194,6 +194,21 @@ Fortuneo, c'est un **historique d'opérations** → il reconstitue fidèlement l
   ticker n'est pas fourni par TR et peut être complété ensuite (utile pour Finnhub/TradingView).
 
 Vous choisissez le **compte cible** (par défaut « CTO Trade Republic »).
+
+### Import Fortuneo — historique des opérations (CSV)
+
+En plus de l'instantané `.xls`, Fortuneo fournit un **« historique des opérations bourse »**
+au format `.csv` (séparateur `;`, encodage Windows-1252, en-têtes français). L'app le reconnaît
+automatiquement, gère l'encodage, et en tire un **historique réel** :
+
+- `Achat Comptant` → achat, `Vente Comptant` → vente (frais depuis `Courtage/Prélèvement`) ;
+- `Encaissement Coupons` → dividende ; `Taxe` / `TTF` / droits → frais.
+- Ce format **ne contient pas d'ISIN** : les actifs sont rapprochés par **nom** (le même nom
+  que celui extrait de l'instantané `.xls`).
+
+> ⚠️ N'importez pas **à la fois** l'instantané `.xls` et l'historique `.csv` dans le même
+> compte : les positions seraient comptées deux fois. Préférez l'**historique** pour un suivi
+> fidèle (dates, frais, dividendes réels).
 
 ## 8. Données d'analyse (Finnhub)
 

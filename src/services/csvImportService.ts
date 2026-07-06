@@ -46,22 +46,36 @@ export interface ParsedCsv {
   rows: Record<string, string>[]
 }
 
-/** Parse un fichier CSV côté client. */
-export function parseCsvFile(file: File): Promise<ParsedCsv> {
-  return new Promise((resolve, reject) => {
-    Papa.parse<Record<string, string>>(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: (h) => h.trim(),
-      complete: (res) => {
-        resolve({
-          headers: res.meta.fields ?? [],
-          rows: res.data.filter((r) => Object.keys(r).length > 0),
-        })
-      },
-      error: (err) => reject(err),
-    })
+/**
+ * Lit un fichier texte en gérant l'encodage : UTF-8 par défaut, repli
+ * Windows-1252 (Latin-1) si des caractères de remplacement apparaissent
+ * (cas des exports Fortuneo). Papa détecte le séparateur (`,` ou `;`).
+ */
+async function readFileSmart(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const utf8 = new TextDecoder('utf-8').decode(buf)
+  if (utf8.includes('�')) {
+    try {
+      return new TextDecoder('windows-1252').decode(buf)
+    } catch {
+      return utf8
+    }
+  }
+  return utf8
+}
+
+/** Parse un fichier CSV côté client (encodage + séparateur auto-détectés). */
+export async function parseCsvFile(file: File): Promise<ParsedCsv> {
+  const text = await readFileSmart(file)
+  const res = Papa.parse<Record<string, string>>(text, {
+    header: true,
+    skipEmptyLines: true,
+    transformHeader: (h) => h.trim(),
   })
+  return {
+    headers: res.meta.fields ?? [],
+    rows: res.data.filter((r) => Object.keys(r).length > 0),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +315,102 @@ export function parseTradeRepublicCsv(parsed: ParsedCsv, accountName: string): B
     mapping,
     detectedAccountName: accountName,
     detectedAccountType: 'CTO',
+    count: rows.length,
+    skipped,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Import Fortuneo — export CSV « Historique des opérations bourse ».
+// Séparateur ';', encodage Latin-1, en-têtes français. Historique d'opérations
+// (achats/ventes, coupons, taxes) → reconstitution fidèle.
+// ⚠️ Ne pas importer à la fois ce fichier ET l'instantané .xls dans le même
+// compte (double comptage des positions).
+// ---------------------------------------------------------------------------
+
+function normKey(s: unknown): string {
+  return String(s ?? '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z]/g, '')
+}
+
+function resolveCol(headers: string[], target: string): string | undefined {
+  return headers.find((h) => normKey(h) === target)
+}
+
+export function isFortuneoHistoryCsv(headers: string[]): boolean {
+  const keys = new Set(headers.map(normKey))
+  return keys.has('operation') && (keys.has('montantnet') || keys.has('montantbrut'))
+}
+
+function mapFortuneoOp(operation: string): TransactionType | null {
+  const o = normKey(operation)
+  if (o.includes('achat')) return 'BUY'
+  if (o.includes('vente')) return 'SELL'
+  if (o.includes('coupon') || o.includes('dividend')) return 'DIVIDEND'
+  if (o.includes('taxe') || o.includes('ttf') || o.includes('droit') || o.includes('frais')) return 'FEE'
+  if (o.includes('versement') || o.includes('virement') || o.includes('depot')) return 'DEPOSIT'
+  if (o.includes('retrait')) return 'WITHDRAWAL'
+  return null
+}
+
+export function parseFortuneoHistoryCsv(parsed: ParsedCsv, accountName: string): BrokerImportResult {
+  const H = parsed.headers
+  const cLib = resolveCol(H, 'libelle')
+  const cOp = resolveCol(H, 'operation')
+  const cDate = resolveCol(H, 'date')
+  const cQte = resolveCol(H, 'qte')
+  const cPrix = resolveCol(H, 'prixdexe') ?? resolveCol(H, 'prix')
+  const cFee = resolveCol(H, 'courtageprelevement')
+  const cNet = resolveCol(H, 'montantnet')
+  const cDev = resolveCol(H, 'devise')
+
+  const rows: Record<string, string>[] = []
+  let skipped = 0
+  for (const raw of parsed.rows) {
+    const op = String((cOp && raw[cOp]) ?? '')
+    const type = mapFortuneoOp(op)
+    if (!type) {
+      skipped++
+      continue
+    }
+    const isTrade = type === 'BUY' || type === 'SELL'
+    const qty = parseNumber(cQte ? raw[cQte] : undefined)
+    const price = parseNumber(cPrix ? raw[cPrix] : undefined)
+    const fee = parseNumber(cFee ? raw[cFee] : undefined)
+    const net = parseNumber(cNet ? raw[cNet] : undefined)
+
+    rows.push({
+      date: parseDate(cDate ? raw[cDate] : undefined) ?? '',
+      account: accountName,
+      type,
+      assetName: isTrade || type === 'DIVIDEND' ? String((cLib && raw[cLib]) ?? '').trim() : '',
+      ticker: '',
+      isin: '',
+      quantity: isTrade && qty != null ? String(qty) : '',
+      price: isTrade && price != null ? String(price) : '',
+      fees: isTrade && fee != null ? String(Math.abs(fee)) : '',
+      amount: !isTrade && net != null ? String(Math.abs(net)) : '',
+      currency: String((cDev && raw[cDev]) ?? 'EUR').trim().toUpperCase() === 'USD' ? 'USD' : 'EUR',
+      note: op.trim().slice(0, 120),
+    })
+  }
+
+  const mapping: ColumnMapping = {}
+  for (const c of GENERIC_COLUMNS) mapping[c] = c
+  return {
+    broker: 'FORTUNEO',
+    note:
+      `Export Fortuneo (historique des opérations) — ${rows.length} opération(s). ` +
+      `Historique réel : achats/ventes (frais inclus), coupons, taxes. ` +
+      `Sans ISIN dans ce format, les actifs sont rapprochés par nom. ` +
+      `⚠️ N'importez pas aussi l'instantané .xls dans le même compte (double comptage).`,
+    parsed: { headers: [...GENERIC_COLUMNS], rows },
+    mapping,
+    detectedAccountName: accountName,
+    detectedAccountType: 'PEA',
     count: rows.length,
     skipped,
   }
