@@ -8,7 +8,6 @@ import GlobalSearch from '../search/GlobalSearch'
 const NAV = [
   { to: '/portfolio', label: 'Portefeuille', icon: '📊' },
   { to: '/dividends', label: 'Dividendes', icon: '💰' },
-  { to: '/import', label: 'Import CSV', icon: '📥' },
   { to: '/settings', label: 'Paramètres', icon: '⚙️' },
 ]
 

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
 import { Card } from '../components/common/ui'
+import { isUnreachableError } from '../utils/errors'
 import {
   buildImportPreview,
   executeImport,
@@ -49,7 +51,6 @@ export default function CsvImportPage() {
   // Options d'import
   const [autoCreateAccounts, setAutoCreateAccounts] = useState(true)
   const [autoCreateAssets, setAutoCreateAssets] = useState(true)
-  const [includeDuplicates, setIncludeDuplicates] = useState(false)
   const [defaultAccountType, setDefaultAccountType] = useState<AccountType>('CTO')
 
   function reset() {
@@ -135,7 +136,7 @@ export default function CsvImportPage() {
     try {
       const res = await executeImport(
         preview,
-        { fileName, autoCreateAccounts, autoCreateAssets, includeDuplicates, defaultAccountType },
+        { fileName, autoCreateAccounts, autoCreateAssets, includeDuplicates: false, defaultAccountType },
         user.id,
         accounts,
         assets,
@@ -143,34 +144,32 @@ export default function CsvImportPage() {
       setResult(res)
       await reload()
     } catch (e) {
-      setError(e instanceof Error ? e.message : "L'import a échoué.")
+      if (isUnreachableError(e)) {
+        setError(
+          "Serveur injoignable : impossible d'écrire dans la base. Le projet Supabase est " +
+            "peut-être en pause, ou le réseau / DNS de votre entreprise bloque Supabase " +
+            '(testez depuis un autre réseau, ex. partage de connexion 4G). Aucune donnée ' +
+            "n'a été enregistrée.",
+        )
+      } else {
+        setError(e instanceof Error ? e.message : "L'import a échoué.")
+      }
     } finally {
       setBusy(false)
     }
   }
 
-  const sampleCsv =
-    'date,account,type,assetName,ticker,isin,quantity,price,fees,amount,currency,note\n' +
-    '2024-01-15,CTO Trade Republic,BUY,Apple Inc.,AAPL,US0378331005,5,185.30,1,,USD,Achat AAPL\n' +
-    '2024-02-01,PEA Fortuneo,dépôt,,,,,,,1000,EUR,Versement\n' +
-    '2024-03-10,CTO Trade Republic,dividende,Apple Inc.,AAPL,,,,,2.5,USD,Dividende'
-
-  function downloadSample() {
-    const blob = new Blob([sampleCsv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'exemple-import-generique.csv'
-    a.click()
-    URL.revokeObjectURL(url)
-  }
-
   return (
     <div className="page">
-      <h1 className="page-title">Import CSV</h1>
+      <div className="page-head">
+        <div>
+          <Link to="/portfolio" className="back-link">← Portefeuille</Link>
+          <h1 className="page-title">Import CSV</h1>
+        </div>
+      </div>
 
       {/* Étape 1 : upload */}
-      <Card title="1 · Fichier et format">
+      <Card title="Fichier et format">
         <div className="import-controls">
           <label className="field">
             <span>Format</span>
@@ -192,15 +191,14 @@ export default function CsvImportPage() {
               }}
             />
           </label>
-          <button className="btn btn-ghost btn-sm" onClick={downloadSample} type="button">
-            Télécharger un exemple
-          </button>
         </div>
         <p className="muted small">
-          <strong>Fortuneo</strong> : « portefeuille détaillé » (.xls, positions) ou « historique
-          des opérations » (.csv) — mapping automatique.
-          {' '}<strong>Trade Republic</strong> : export CSV de transactions — mapping automatique.
-          {' '}<strong>Générique</strong> : CSV avec mapping manuel des colonnes.
+          <strong>Fortuneo</strong> : l'export « portefeuille détaillé » (.xls) est reconnu
+          automatiquement ; chaque position devient un achat au PRU (instantané). L'« historique
+          des opérations » (.csv) est aussi reconnu.
+          <br />
+          <strong>Trade Republic</strong> : l'export CSV de transactions est reconnu automatiquement ;
+          chaque ligne (dépôt, achat/vente, dividende, intérêt, frais) devient une opération datée.
         </p>
         {busy && !preview && <p className="muted">Lecture du fichier…</p>}
       </Card>
@@ -210,7 +208,7 @@ export default function CsvImportPage() {
 
       {/* Étape 2 : mapping (CSV générique uniquement) */}
       {parsed && !preset && (
-        <Card title="2 · Mapping des colonnes" action={<span className="muted small">{parsed.rows.length} ligne(s), {parsed.headers.length} colonne(s)</span>}>
+        <Card title="Mapping des colonnes" action={<span className="muted small">{parsed.rows.length} ligne(s), {parsed.headers.length} colonne(s)</span>}>
           <div className="mapping-grid">
             {GENERIC_COLUMNS.map((col) => (
               <label key={col} className="field">
@@ -235,7 +233,7 @@ export default function CsvImportPage() {
       {/* Étape 3 : aperçu */}
       {preview && (
         <Card
-          title="3 · Aperçu et validation"
+          title="Aperçu et validation"
           action={
             <span className="import-summary">
               <span className="chip chip-ok">{preview.okCount} OK</span>
@@ -278,10 +276,6 @@ export default function CsvImportPage() {
               <input type="checkbox" checked={autoCreateAssets} onChange={(e) => setAutoCreateAssets(e.target.checked)} />
               Créer automatiquement les actifs manquants
             </label>
-            <label className="checkbox">
-              <input type="checkbox" checked={includeDuplicates} onChange={(e) => setIncludeDuplicates(e.target.checked)} />
-              Importer aussi les doublons probables
-            </label>
             <label className="field inline">
               <span>Type des comptes créés</span>
               <select value={defaultAccountType} onChange={(e) => setDefaultAccountType(e.target.value as AccountType)}>
@@ -323,10 +317,9 @@ export default function CsvImportPage() {
           {error && <div className="alert alert-error">{error}</div>}
 
           <div className="form-actions" style={{ justifyContent: 'flex-start' }}>
-            <button className="btn btn-primary" onClick={handleImport} disabled={busy || (preview.okCount === 0 && !(includeDuplicates && preview.duplicateCount > 0))}>
-              {busy ? 'Import en cours…' : `Importer ${preview.okCount + (includeDuplicates ? preview.duplicateCount : 0)} transaction(s)`}
+            <button className="btn btn-primary" onClick={handleImport} disabled={busy || preview.okCount === 0}>
+              {busy ? 'Import en cours…' : `Importer ${preview.okCount} transaction(s)`}
             </button>
-            <button className="btn btn-ghost" onClick={reset}>Recommencer</button>
           </div>
         </Card>
       )}
@@ -345,22 +338,6 @@ export default function CsvImportPage() {
         </Card>
       )}
 
-      <Card title="Format générique attendu">
-        <p className="muted small">
-          Colonnes reconnues : <code>{GENERIC_COLUMNS.join(', ')}</code>.
-          Types acceptés : BUY/SELL/DIVIDEND/FEE/DEPOSIT/WITHDRAWAL et leurs équivalents français
-          (achat, vente, dividende, frais, dépôt, retrait).
-          Dates ISO (AAAA-MM-JJ) ou JJ/MM/AAAA. Montants avec point ou virgule décimale.
-        </p>
-        <pre className="code-block">{sampleCsv}</pre>
-        <p className="muted small">
-          <strong>Fortuneo</strong> : l'export « portefeuille détaillé » (.xls) est reconnu
-          automatiquement ; chaque position devient un achat au PRU (instantané).
-          <br />
-          <strong>Trade Republic</strong> : l'export CSV de transactions est reconnu automatiquement ;
-          chaque ligne (dépôt, achat/vente, dividende, intérêt, frais) devient une opération datée.
-        </p>
-      </Card>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { isUnreachableError } from '../utils/errors'
 
 // Email pré-rempli en dur (mono-utilisateur) : seul le mot de passe est demandé.
 const PRESET_EMAIL = (import.meta.env.VITE_LOGIN_EMAIL as string | undefined)?.trim() || ''
@@ -18,7 +19,7 @@ function describeSignInError(err: unknown): ReactNode {
 
   // 1) Réseau : le fetch n'a jamais abouti (projet en pause, hors ligne, ou
   //    domaine Supabase bloqué par un filtrage DNS d'entreprise type Cisco Umbrella).
-  if (status === 0 || /failed to fetch|networkerror|load failed|fetch/i.test(msg)) {
+  if (isUnreachableError(err)) {
     return (
       <>
         <strong>Serveur injoignable.</strong> La requête n'a pas atteint Supabase. Causes possibles :

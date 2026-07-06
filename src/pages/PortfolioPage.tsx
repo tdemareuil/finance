@@ -47,9 +47,14 @@ export default function PortfolioPage() {
     <div className="page">
       <div className="page-head">
         <h1 className="page-title">Portefeuille</h1>
-        <button className="btn btn-primary" onClick={() => setAdding(true)}>
-          + Ajouter une opération
-        </button>
+        <div className="page-head-actions">
+          <button className="btn btn-primary" onClick={() => setAdding(true)}>
+            + Ajouter une opération
+          </button>
+          <Link className="btn btn-ghost" to="/import">
+            📥 Importer un CSV
+          </Link>
+        </div>
       </div>
 
       {transactions.length === 0 ? (
