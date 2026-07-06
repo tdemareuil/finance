@@ -38,6 +38,7 @@ jobs:
           VITE_EODHD_API_KEY: ${{ secrets.VITE_EODHD_API_KEY }}
           VITE_FINNHUB_API_KEY: ${{ secrets.VITE_FINNHUB_API_KEY }}
           VITE_FMP_API_KEY: ${{ secrets.VITE_FMP_API_KEY }}
+          VITE_LOGIN_EMAIL: ${{ secrets.VITE_LOGIN_EMAIL }}
           VITE_DEFAULT_BENCHMARK: ${{ vars.VITE_DEFAULT_BENCHMARK || 'CW8.PA' }}
 
       - uses: actions/upload-pages-artifact@v3

@@ -2,13 +2,17 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+// Email pré-rempli en dur (mono-utilisateur) : seul le mot de passe est demandé.
+const PRESET_EMAIL = (import.meta.env.VITE_LOGIN_EMAIL as string | undefined)?.trim() || ''
+
 export default function LoginPage() {
   const { user, signIn, supabaseEnabled } = useAuth()
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(PRESET_EMAIL)
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const passwordOnly = PRESET_EMAIL !== ''
 
   // Déjà connecté → dashboard (dans un effet, jamais pendant le rendu).
   useEffect(() => {
@@ -45,17 +49,22 @@ export default function LoginPage() {
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="auth-form">
-            <label className="field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                placeholder="vous@exemple.fr"
-              />
-            </label>
+            {passwordOnly ? (
+              // Email fourni par l'environnement, envoyé au serveur mais non éditable.
+              <input type="hidden" name="email" value={email} autoComplete="username" />
+            ) : (
+              <label className="field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  placeholder="vous@exemple.fr"
+                />
+              </label>
+            )}
             <label className="field">
               <span>Mot de passe</span>
               <input
@@ -63,6 +72,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoFocus={passwordOnly}
                 autoComplete="current-password"
                 placeholder="••••••••"
               />

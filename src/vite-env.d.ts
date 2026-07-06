@@ -6,6 +6,7 @@ interface ImportMetaEnv {
   readonly VITE_EODHD_API_KEY?: string
   readonly VITE_FINNHUB_API_KEY?: string
   readonly VITE_FMP_API_KEY?: string
+  readonly VITE_LOGIN_EMAIL?: string
   readonly VITE_DEFAULT_BENCHMARK?: string
   readonly VITE_BASE?: string
 }

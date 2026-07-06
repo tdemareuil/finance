@@ -286,6 +286,51 @@ données de démonstration »). Un fallback réussi n'affiche jamais d'erreur.
 - `xlsx@0.18.5` (npm) porte des advisories connues ; l'app ne parse que vos propres
   fichiers de confiance. Pour durcir, migrer vers la version CDN de SheetJS.
 
+## 11. Décisions de conception & optimisations possibles
+
+Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le fil plus tard.
+
+### Décisions de conception (et alternatives)
+
+- **Consensus dérivé des tendances de recommandation.** `analysisService.getConsensus` réutilise
+  le résultat de `getRecommendationTrends` (même clé de cache) au lieu d'un appel dédié. Ouvrir
+  l'onglet Analyse coûte donc **3 appels Finnhub, pas 4** (recommandation partagée par consensus
+  + trends via déduplication in-flight, + news + fondamentaux). Les providers déclarent quand
+  même `ANALYST_CONSENSUS`. *Alternative :* endpoint consensus dédié (FMP en a un) — plus de
+  crédits, potentiellement plus précis pour les titres où trends ≠ consensus.
+- **Taux de change EUR/USD fixe** (`portfolioCalculator.DEFAULT_FX`, ~0,92). *Alternative :* taux
+  temps réel / historique par date de transaction.
+- **Benchmark MSCI World approché** : on rejoue les flux nets (dépôts − retraits) dans l'ETF aux
+  cours historiques. *Alternative :* vraie performance time-weighted (TWR) / money-weighted (MWR).
+- **Série de patrimoine échantillonnée en fin de mois** (graphiques). *Alternative :* pas quotidien.
+- **Table `portfolio_snapshots` non alimentée** : les séries sont recalculées à la volée à chaque
+  chargement. *Optimisation :* écrire un snapshot quotidien pour un historique fiable et rapide.
+- **Import Fortuneo = instantané de positions** → un `BUY` par ligne au PRU, daté du jour de
+  l'export. Pas d'historique réel (dividendes / frais / ventes / dates d'achat). *Alternative :*
+  parser l'export « opérations » daté de Fortuneo.
+- **Objectifs de cours** : Finnhub gratuit ne les fournit pas (capability non déclarée) ; fallback
+  FMP (souvent premium → `ERROR`) puis mock. En pratique souvent en mode démo. *Alternative :* plan payant.
+- **Consensus/analyse pour ETF** : souvent absent → message informatif (pas une erreur).
+- **Login mono-utilisateur** : `VITE_LOGIN_EMAIL` est une variable *build-time* → embarquée dans le
+  JS livré. L'email est « masqué » de l'UI mais **pas secret** (acceptable, non sensible).
+- **Mode démo** : le code existe encore (`enterDemoMode`) mais est retiré de l'UI de login ;
+  accessible uniquement via le flag LocalStorage `patrimoine-demo-session`.
+- **Cache** : résultats valides, **vides et erreurs** mis en cache (mémoire + LocalStorage), TTL par
+  type. Les résultats mock sont aussi cachés (inoffensif car déterministes).
+
+### Optimisations possibles / TODO
+
+- Auto-calcul des **intérêts Livret+** à un taux configurable par compte (aujourd'hui : saisir
+  les intérêts comme dépôts manuels, cf. données démo « Intérêts Livret+ »).
+- Taux de change réel + conversion par date.
+- Benchmark TWR/MWR ; snapshots quotidiens persistés (`portfolio_snapshots`).
+- **Code-splitting** : `xlsx` déjà lazy ; découper Recharts / par route (bundle ~250 kB gzip).
+- Migrer `xlsx` vers la build CDN de SheetJS (advisories npm 0.18.5).
+- Éventuel passage à `@tanstack/react-query` (staleTime alignés sur les TTL) si l'app grossit.
+- Garder l'état de l'onglet Analyse monté (aujourd'hui remonté au changement d'onglet, mais servi
+  instantanément par le cache).
+- Champ `fmpSymbol` dédié sur l'`Asset` (actuellement FMP réutilise finnhub/eodhd/ticker).
+
 ## Structure du projet
 
 ```
