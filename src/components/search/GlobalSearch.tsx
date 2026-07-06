@@ -3,30 +3,83 @@ import { useNavigate } from 'react-router-dom'
 import { usePortfolio } from '../../context/PortfolioContext'
 import { Modal } from '../common/ui'
 import TradingViewWidget from '../assets/TradingViewWidget'
+import AssetAnalysis from '../assets/AssetAnalysis'
+import { getLatestPrice } from '../../services/marketDataService'
+import type { Asset, AssetType, Currency } from '../../types'
 import {
   searchInstruments,
   toTradingViewSymbol,
   type InstrumentSearchResult,
 } from '../../services/instrumentSearchService'
 
+// Places de cotation en zone euro → devise EUR (le reste : USD par défaut,
+// Currency ne gère que EUR/USD). Best-effort pour le formatage des montants.
+const EUR_EXCHANGES = new Set(['PA', 'AS', 'BR', 'LS', 'DE', 'MI', 'MC', 'VI', 'HE', 'IR', 'F'])
+
+function inferCurrency(symbol: string): Currency {
+  const dot = symbol.lastIndexOf('.')
+  if (dot === -1) return 'USD'
+  return EUR_EXCHANGES.has(symbol.slice(dot + 1).toUpperCase()) ? 'EUR' : 'USD'
+}
+
+function inferAssetType(finnhubType: string): AssetType {
+  const t = finnhubType.toLowerCase()
+  if (t.includes('etf') || t.includes('etp') || t.includes('fund')) return 'ETF'
+  return 'STOCK'
+}
+
+/** Construit un Asset synthétique depuis un résultat de recherche (hors portefeuille). */
+function syntheticAsset(result: InstrumentSearchResult): Asset {
+  return {
+    id: `search-${result.symbol}`,
+    userId: '',
+    name: result.description,
+    ticker: result.displaySymbol,
+    currency: inferCurrency(result.symbol),
+    type: inferAssetType(result.type),
+    finnhubSymbol: result.symbol,
+    createdAt: '',
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Modal de fiche rapide (graphique TradingView + infos)
+// Modal de fiche rapide (graphique TradingView + analyse complète)
 // ---------------------------------------------------------------------------
 function QuickMarketModal({
   result,
-  portfolioAssetId,
+  portfolioAsset,
   onClose,
 }: {
   result: InstrumentSearchResult
-  portfolioAssetId: string | undefined
+  portfolioAsset: Asset | undefined
   onClose: () => void
 }) {
   const navigate = useNavigate()
   const tvSymbol = toTradingViewSymbol(result.symbol)
 
+  // Actif utilisé pour l'analyse : le vrai si présent au portefeuille, sinon synthétique.
+  const asset = portfolioAsset ?? syntheticAsset(result)
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null)
+
+  useEffect(() => {
+    let active = true
+    setCurrentPrice(null)
+    getLatestPrice(asset)
+      .then((r) => {
+        if (active) setCurrentPrice(r.data?.close ?? null)
+      })
+      .catch(() => {
+        if (active) setCurrentPrice(null)
+      })
+    return () => {
+      active = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [asset.id])
+
   function handleGoToDetail() {
-    if (portfolioAssetId) {
-      navigate(`/assets/${portfolioAssetId}`)
+    if (portfolioAsset) {
+      navigate(`/assets/${portfolioAsset.id}`)
       onClose()
     }
   }
@@ -44,7 +97,7 @@ function QuickMarketModal({
       onClose={onClose}
       wide
       footer={
-        portfolioAssetId ? (
+        portfolioAsset ? (
           <button className="btn btn-primary btn-sm" onClick={handleGoToDetail}>
             Voir le détail complet dans votre portefeuille →
           </button>
@@ -57,7 +110,7 @@ function QuickMarketModal({
             {result.type}
           </span>
         )}
-        {portfolioAssetId && (
+        {portfolioAsset && (
           <span className="chip chip-positive" style={{ fontSize: '0.75rem' }}>
             Dans votre portefeuille
           </span>
@@ -67,6 +120,7 @@ function QuickMarketModal({
         </span>
       </div>
       <TradingViewWidget symbol={tvSymbol} />
+      <AssetAnalysis asset={asset} currentPrice={currentPrice} />
     </Modal>
   )
 }
@@ -195,7 +249,7 @@ export default function GlobalSearch() {
       {selected && (
         <QuickMarketModal
           result={selected}
-          portfolioAssetId={findPortfolioAsset(selected)?.id}
+          portfolioAsset={findPortfolioAsset(selected)}
           onClose={() => setSelected(null)}
         />
       )}
