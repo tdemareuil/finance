@@ -27,7 +27,16 @@ export default function LoginPage() {
       await signIn(email, password)
       navigate('/dashboard')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Une erreur est survenue.')
+      const msg = err instanceof Error ? err.message : 'Une erreur est survenue.'
+      // "Failed to fetch" = Supabase injoignable (projet en pause, hors ligne…).
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        setError(
+          "Impossible de joindre Supabase. Le projet est peut-être en pause (offre gratuite) : " +
+            'ouvrez le dashboard Supabase et cliquez sur « Restore »/« Resume », puis réessayez.',
+        )
+      } else {
+        setError(msg)
+      }
     } finally {
       setBusy(false)
     }
@@ -39,7 +48,7 @@ export default function LoginPage() {
         <div className="auth-brand">
           <span className="brand-icon">💰</span>
           <h1>Patrimoine</h1>
-          <p className="auth-tagline">Suivi de portefeuille CTO · PEA · Livret+</p>
+          <p className="auth-tagline">Suivi de portefeuille CTO · PEA · Livrets</p>
         </div>
 
         {!supabaseEnabled ? (
