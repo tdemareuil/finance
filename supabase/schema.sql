@@ -104,6 +104,24 @@ create table if not exists public.dividend_events (
 );
 
 -- ---------------------------------------------------------------------
+-- rsu_grants
+-- ---------------------------------------------------------------------
+create table if not exists public.rsu_grants (
+  id                 uuid primary key default gen_random_uuid(),
+  user_id            uuid not null references auth.users (id) on delete cascade,
+  asset_id           uuid not null references public.assets (id) on delete cascade,
+  grant_date         date not null,
+  total_shares       numeric not null,
+  platform           text not null check (platform in ('EquatePlus', 'Carta')),
+  vesting_type       text not null check (vesting_type in ('cliff', 'monthly')),
+  vesting_date       date,
+  vesting_start_date date,
+  vesting_months     integer,
+  note               text,
+  created_at         timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------
 -- import_batches
 -- ---------------------------------------------------------------------
 create table if not exists public.import_batches (
@@ -118,6 +136,9 @@ create table if not exists public.import_batches (
 -- ---------------------------------------------------------------------
 -- Index utiles
 -- ---------------------------------------------------------------------
+create index if not exists idx_rsu_grants_user  on public.rsu_grants (user_id);
+create index if not exists idx_rsu_grants_asset on public.rsu_grants (asset_id);
+
 create index if not exists idx_accounts_user      on public.accounts (user_id);
 create index if not exists idx_assets_user        on public.assets (user_id);
 create index if not exists idx_tx_user            on public.transactions (user_id);
@@ -136,6 +157,7 @@ alter table public.transactions        enable row level security;
 alter table public.portfolio_snapshots enable row level security;
 alter table public.dividend_events     enable row level security;
 alter table public.import_batches      enable row level security;
+alter table public.rsu_grants          enable row level security;
 
 -- Une paire de policies par table : SELECT/INSERT/UPDATE/DELETE
 -- restreints à auth.uid() = user_id.
@@ -146,7 +168,7 @@ declare
   t text;
   tables text[] := array[
     'accounts', 'assets', 'transactions',
-    'portfolio_snapshots', 'dividend_events', 'import_batches'
+    'portfolio_snapshots', 'dividend_events', 'import_batches', 'rsu_grants'
   ];
 begin
   foreach t in array tables loop

@@ -11,6 +11,7 @@ import AssetDetailPage from './pages/AssetDetailPage'
 import DividendsPage from './pages/DividendsPage'
 import CsvImportPage from './pages/CsvImportPage'
 import SettingsPage from './pages/SettingsPage'
+import RsuPage from './pages/RsuPage'
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/assets/:assetId" element={<AssetDetailPage />} />
         <Route path="/dividends" element={<DividendsPage />} />
         <Route path="/import" element={<CsvImportPage />} />
+        <Route path="/rsu" element={<RsuPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

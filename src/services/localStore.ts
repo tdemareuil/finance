@@ -3,6 +3,7 @@ import type {
   Asset,
   DividendEvent,
   ImportBatch,
+  RsuGrant,
   Transaction,
 } from '../types'
 import { buildDemoData } from '../data/demoData'
@@ -24,12 +25,13 @@ interface StoreShape {
   transactions: Transaction[]
   dividend_events: DividendEvent[]
   import_batches: ImportBatch[]
+  rsu_grants: RsuGrant[]
 }
 
 type TableName = keyof StoreShape
 
 function emptyStore(): StoreShape {
-  return { accounts: [], assets: [], transactions: [], dividend_events: [], import_batches: [] }
+  return { accounts: [], assets: [], transactions: [], dividend_events: [], import_batches: [], rsu_grants: [] }
 }
 
 function load(): StoreShape {
@@ -69,6 +71,7 @@ export function seedDemoData(userId: string = DEMO_USER_ID): void {
     transactions: data.transactions,
     dividend_events: data.dividendEvents,
     import_batches: [],
+    rsu_grants: [],
   }
   persist(store)
 }

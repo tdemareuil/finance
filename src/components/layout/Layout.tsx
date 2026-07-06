@@ -11,6 +11,7 @@ const NAV = [
   { to: '/accounts', label: 'Comptes', icon: '🏦' },
   { to: '/assets', label: 'Actifs', icon: '📈' },
   { to: '/dividends', label: 'Dividendes', icon: '💰' },
+  { to: '/rsu', label: 'RSU', icon: '🏷️' },
   { to: '/import', label: 'Import CSV', icon: '📥' },
   { to: '/settings', label: 'Paramètres', icon: '⚙️' },
 ]

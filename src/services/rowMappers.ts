@@ -3,6 +3,7 @@ import type {
   Asset,
   DividendEvent,
   ImportBatch,
+  RsuGrant,
   Transaction,
 } from '../types'
 
@@ -164,5 +165,39 @@ export function importBatchToRow(b: Partial<ImportBatch>): Record<string, unknow
     file_name: b.fileName,
     broker: b.broker,
     status: b.status,
+  })
+}
+
+// --- RsuGrant ---------------------------------------------------------------
+export function rowToRsuGrant(r: Record<string, any>): RsuGrant {
+  return {
+    id: r.id,
+    userId: r.user_id,
+    assetId: r.asset_id,
+    grantDate: r.grant_date,
+    totalShares: Number(r.total_shares),
+    platform: r.platform,
+    vestingType: r.vesting_type,
+    vestingDate: r.vesting_date ?? undefined,
+    vestingStartDate: r.vesting_start_date ?? undefined,
+    vestingMonths: r.vesting_months ?? undefined,
+    note: r.note ?? undefined,
+    createdAt: r.created_at,
+  }
+}
+
+export function rsuGrantToRow(g: Partial<RsuGrant>): Record<string, unknown> {
+  return clean({
+    id: g.id,
+    user_id: g.userId,
+    asset_id: g.assetId,
+    grant_date: g.grantDate,
+    total_shares: g.totalShares,
+    platform: g.platform,
+    vesting_type: g.vestingType,
+    vesting_date: g.vestingDate,
+    vesting_start_date: g.vestingStartDate,
+    vesting_months: g.vestingMonths,
+    note: g.note,
   })
 }

@@ -197,6 +197,39 @@ export interface DividendCalendarEntry {
 }
 
 // ---------------------------------------------------------------------------
+// RSU (Restricted Stock Units)
+// ---------------------------------------------------------------------------
+export type RsuPlatform = 'EquatePlus' | 'Carta'
+export type VestingType = 'cliff' | 'monthly'
+
+export interface RsuGrant {
+  id: string
+  userId: string
+  /** Actif sous-jacent (action de l'entreprise). */
+  assetId: string
+  grantDate: string // ISO date YYYY-MM-DD
+  totalShares: number
+  platform: RsuPlatform
+  vestingType: VestingType
+  /** cliff : date unique de livraison de la totalité des actions. */
+  vestingDate?: string
+  /** monthly : date du premier vesting mensuel. */
+  vestingStartDate?: string
+  /** monthly : nombre de mensualités (ex : 48 = 4 ans). */
+  vestingMonths?: number
+  note?: string
+  createdAt: string
+}
+
+/** Événement de vesting calculé côté client (non persisté). */
+export interface VestingEvent {
+  date: string
+  shares: number
+  cumulativeShares: number
+  status: 'vested' | 'pending'
+}
+
+// ---------------------------------------------------------------------------
 // Analyse (analysisService — consensus, objectifs, news, fondamentaux).
 // Séparé des données de marché (marketDataService).
 // ---------------------------------------------------------------------------
