@@ -23,6 +23,7 @@ export function rowToAccount(r: Record<string, any>): Account {
     name: r.name,
     type: r.type,
     currency: r.currency,
+    interestRate: r.interest_rate ?? undefined,
     createdAt: r.created_at,
   }
 }
@@ -34,6 +35,7 @@ export function accountToRow(a: Partial<Account>): Record<string, unknown> {
     name: a.name,
     type: a.type,
     currency: a.currency,
+    interest_rate: a.interestRate,
   })
 }
 

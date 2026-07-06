@@ -14,6 +14,8 @@ export interface Account {
   name: string
   type: AccountType
   currency: Currency
+  /** Taux d'intérêt annuel (fraction, ex : 0.03 = 3%). Pertinent pour LIVRET_PLUS. */
+  interestRate?: number
   createdAt: string
 }
 
@@ -176,6 +178,10 @@ export interface PortfolioSummary {
   /** Performance simple = (valeur + réalisé + dividendes - investi) / investi. */
   totalReturnPct: number | null
   annualizedReturnPct: number | null
+  /** Intérêts Livret+ crédités (années révolues), inclus dans le cash. */
+  livretInterestCredited: number
+  /** Intérêts Livret+ courus (année en cours, non encore crédités). */
+  livretInterestAccrued: number
   positions: Position[]
 }
 

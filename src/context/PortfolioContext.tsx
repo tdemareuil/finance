@@ -77,6 +77,8 @@ const EMPTY_SUMMARY: PortfolioSummary = {
   feesPaid: 0,
   totalReturnPct: null,
   annualizedReturnPct: null,
+  livretInterestCredited: 0,
+  livretInterestAccrued: 0,
   positions: [],
 }
 
@@ -169,7 +171,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             const histByAsset: Record<string, MarketPrice[]> = {}
             for (const [id, series] of histEntries) histByAsset[id] = series
             if (reqId !== reqIdRef.current) return
-            setValueSeries(computeValueSeries(txs, ast, histByAsset))
+            setValueSeries(computeValueSeries(txs, ast, histByAsset, acc))
 
             const bench = await computeBenchmarkSeries(txs, benchmarkSymbol)
             if (reqId !== reqIdRef.current) return
@@ -215,8 +217,8 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   )
 
   const summary = useMemo(
-    () => (transactions.length ? computeSummary(positions, transactions) : EMPTY_SUMMARY),
-    [positions, transactions],
+    () => (transactions.length ? computeSummary(positions, transactions, accounts) : EMPTY_SUMMARY),
+    [positions, transactions, accounts],
   )
 
   const value: PortfolioContextValue = {

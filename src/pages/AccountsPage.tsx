@@ -5,7 +5,7 @@ import { Card, EmptyState, Loading, Modal } from '../components/common/ui'
 import { createAccount, deleteAccount, updateAccount } from '../services/accountService'
 import type { Account, AccountType, Currency } from '../types'
 import { formatMoney } from '../utils/format'
-import { computeCash } from '../services/portfolioCalculator'
+import { computeCash, computeLivretInterest } from '../services/portfolioCalculator'
 
 const TYPE_LABEL: Record<AccountType, string> = { CTO: 'CTO', PEA: 'PEA', LIVRET_PLUS: 'Livret+' }
 
@@ -44,10 +44,13 @@ export default function AccountsPage() {
     setBusy(true)
     setError(null)
     const fd = new FormData(e.currentTarget)
+    const ratePct = String(fd.get('interestRatePct') ?? '').trim().replace(',', '.')
+    const rate = ratePct === '' ? undefined : Number(ratePct) / 100
     const payload = {
       name: String(fd.get('name')).trim(),
       type: fd.get('type') as AccountType,
       currency: fd.get('currency') as Currency,
+      interestRate: rate != null && Number.isFinite(rate) ? rate : undefined,
     }
     try {
       if (editing) {
@@ -85,21 +88,36 @@ export default function AccountsPage() {
                 <th>Nom</th>
                 <th>Type</th>
                 <th>Devise</th>
+                <th className="num">Taux</th>
                 <th className="num">Transactions</th>
+                <th className="num">Intérêts courus</th>
                 <th className="num">Solde (EUR)</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {accounts.map((a) => {
-                const cash = computeCash(transactions.filter((t) => t.accountId === a.id))
+                const accountTx = transactions.filter((t) => t.accountId === a.id)
+                const cash = computeCash(accountTx)
+                const interest =
+                  a.type === 'LIVRET_PLUS' && a.interestRate
+                    ? computeLivretInterest(
+                        accountTx
+                          .filter((t) => t.type === 'DEPOSIT' || t.type === 'WITHDRAWAL')
+                          .map((t) => ({ date: t.date, amount: (t.type === 'DEPOSIT' ? 1 : -1) * (t.amount ?? 0) })),
+                        a.interestRate,
+                      )
+                    : { credited: 0, accrued: 0 }
+                const balance = cash + interest.credited + interest.accrued
                 return (
                   <tr key={a.id}>
                     <td>{a.name}</td>
                     <td><span className="chip chip-default">{TYPE_LABEL[a.type]}</span></td>
                     <td>{a.currency}</td>
+                    <td className="num">{a.interestRate ? `${(a.interestRate * 100).toFixed(2)} %` : '—'}</td>
                     <td className="num">{txCountFor(a.id)}</td>
-                    <td className="num">{formatMoney(cash)}</td>
+                    <td className="num positive">{interest.accrued > 0 ? formatMoney(interest.accrued, a.currency) : '—'}</td>
+                    <td className="num">{formatMoney(balance)}</td>
                     <td className="row-actions">
                       <button className="btn btn-sm btn-ghost" onClick={() => setEditing(a)}>Modifier</button>
                       <button className="btn btn-sm btn-danger-ghost" onClick={() => handleDelete(a)}>Supprimer</button>
@@ -139,6 +157,17 @@ export default function AccountsPage() {
                 <option value="EUR">EUR</option>
                 <option value="USD">USD</option>
               </select>
+            </label>
+            <label className="field">
+              <span>Taux annuel % <span className="muted">(Livret+ : intérêts calculés automatiquement)</span></span>
+              <input
+                name="interestRatePct"
+                type="number"
+                step="any"
+                min="0"
+                defaultValue={current?.interestRate != null ? current.interestRate * 100 : ''}
+                placeholder="Ex : 3"
+              />
             </label>
             {error && <div className="alert alert-error">{error}</div>}
             <div className="form-actions">

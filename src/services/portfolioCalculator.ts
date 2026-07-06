@@ -163,6 +163,104 @@ export function computeCash(transactions: Transaction[], fx: FxTable = DEFAULT_F
   return cash
 }
 
+// ---------------------------------------------------------------------------
+// Intérêts Livret+ — règle française des quinzaines.
+//  - Un versement porte intérêt à partir de la quinzaine SUIVANTE
+//    (dépôt du 1–15 → à partir du 16 ; du 16–fin → à partir du 1er du mois suivant).
+//  - Un retrait cesse de porter intérêt dès la quinzaine où il intervient
+//    (retrait du 1–15 → effet au 1er du mois ; du 16–fin → effet au 16).
+//  - Chaque quinzaine rapporte taux/24 sur le solde présent en début de quinzaine.
+//  - Les intérêts sont capitalisés une fois par an, au 31/12 (puis composés).
+// ---------------------------------------------------------------------------
+
+export interface LivretInterest {
+  /** Intérêts des années révolues (capitalisés), = argent réellement crédité. */
+  credited: number
+  /** Intérêts courus de l'année en cours, pas encore crédités (estimation). */
+  accrued: number
+}
+
+function quinzaineStart(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() <= 15 ? 1 : 16)
+}
+function nextQuinzaine(d: Date): Date {
+  return d.getDate() === 1
+    ? new Date(d.getFullYear(), d.getMonth(), 16)
+    : new Date(d.getFullYear(), d.getMonth() + 1, 1)
+}
+/** Date de valeur d'un flux selon la règle des quinzaines. */
+function valueDate(dateStr: string, isDeposit: boolean): Date {
+  const dt = new Date(dateStr)
+  const y = dt.getFullYear()
+  const m = dt.getMonth()
+  const day = dt.getDate()
+  if (isDeposit) return day <= 15 ? new Date(y, m, 16) : new Date(y, m + 1, 1)
+  return day <= 15 ? new Date(y, m, 1) : new Date(y, m, 16)
+}
+
+/**
+ * Intérêts d'un Livret+ à partir de flux signés (+versement, −retrait),
+ * dans la devise du compte.
+ */
+export function computeLivretInterest(
+  flows: { date: string; amount: number }[],
+  rate: number,
+  asOf: Date = new Date(),
+): LivretInterest {
+  if (!rate || rate <= 0 || flows.length === 0) return { credited: 0, accrued: 0 }
+  const deltas = flows
+    .map((f) => ({ t: valueDate(f.date, f.amount >= 0).getTime(), amount: f.amount }))
+    .sort((a, b) => a.t - b.t)
+  const perQuinzaine = rate / 24
+  let balance = 0
+  let yearAcc = 0
+  let credited = 0
+  let di = 0
+  let cur = quinzaineStart(new Date(deltas[0].t))
+  const asOfTime = asOf.getTime()
+  // Garde-fou : borne le nombre d'itérations (max ~24 quinzaines × 100 ans).
+  for (let guard = 0; cur.getTime() <= asOfTime && guard < 2400; guard++) {
+    while (di < deltas.length && deltas[di].t <= cur.getTime()) {
+      balance += deltas[di].amount
+      di++
+    }
+    if (balance > 0) yearAcc += balance * perQuinzaine
+    const nxt = nextQuinzaine(cur)
+    if (nxt.getFullYear() !== cur.getFullYear()) {
+      // Fin d'année (après la quinzaine du 16 déc.) → capitalisation au 31/12.
+      credited += yearAcc
+      balance += yearAcc
+      yearAcc = 0
+    }
+    cur = nxt
+  }
+  return {
+    credited: Math.round(credited * 100) / 100,
+    accrued: Math.round(yearAcc * 100) / 100,
+  }
+}
+
+/** Agrège les intérêts Livret+ de tous les comptes concernés (en EUR). */
+export function computeAllLivretInterest(
+  accounts: Account[],
+  transactions: Transaction[],
+  fx: FxTable = DEFAULT_FX,
+  asOf: Date = new Date(),
+): LivretInterest {
+  let credited = 0
+  let accrued = 0
+  for (const acc of accounts) {
+    if (acc.type !== 'LIVRET_PLUS' || !acc.interestRate) continue
+    const flows = transactions
+      .filter((t) => t.accountId === acc.id && (t.type === 'DEPOSIT' || t.type === 'WITHDRAWAL'))
+      .map((t) => ({ date: t.date, amount: (t.type === 'DEPOSIT' ? 1 : -1) * (t.amount ?? 0) }))
+    const r = computeLivretInterest(flows, acc.interestRate, asOf)
+    credited += toEur(r.credited, acc.currency, fx)
+    accrued += toEur(r.accrued, acc.currency, fx)
+  }
+  return { credited: Math.round(credited * 100) / 100, accrued: Math.round(accrued * 100) / 100 }
+}
+
 /** Capital investi net (EUR) = dépôts − retraits. */
 export function computeInvestedCapital(transactions: Transaction[], fx: FxTable = DEFAULT_FX): number {
   let net = 0
@@ -198,13 +296,16 @@ function firstTransactionDate(transactions: Transaction[]): string | null {
 export function computeSummary(
   positions: Position[],
   transactions: Transaction[],
+  accounts: Account[] = [],
   fx: FxTable = DEFAULT_FX,
 ): PortfolioSummary {
   const holdingsValue = positions.reduce(
     (s, p) => s + (p.currentValue != null ? toEur(p.currentValue, p.currency, fx) : 0),
     0,
   )
-  const cash = computeCash(transactions, fx)
+  const livret = computeAllLivretInterest(accounts, transactions, fx)
+  // Les intérêts crédités (années révolues) sont de l'argent réellement disponible → cash.
+  const cash = computeCash(transactions, fx) + livret.credited
   const investedCapital = computeInvestedCapital(transactions, fx)
   const unrealizedPnL = positions.reduce(
     (s, p) => s + (p.unrealizedPnL != null ? toEur(p.unrealizedPnL, p.currency, fx) : 0),
@@ -213,7 +314,8 @@ export function computeSummary(
   const realizedPnL = positions.reduce((s, p) => s + toEur(p.realizedPnL, p.currency, fx), 0)
   const dividendsReceived = computeDividends(transactions, fx)
   const feesPaid = computeTotalFees(transactions, fx)
-  const totalValue = holdingsValue + cash
+  // Les intérêts courus (année en cours) sont dus mais pas encore versés → dans la valeur totale.
+  const totalValue = holdingsValue + cash + livret.accrued
 
   const totalReturnPct = investedCapital > 0 ? (totalValue - investedCapital) / investedCapital : null
 
@@ -236,6 +338,8 @@ export function computeSummary(
     feesPaid,
     totalReturnPct,
     annualizedReturnPct,
+    livretInterestCredited: livret.credited,
+    livretInterestAccrued: livret.accrued,
     positions,
   }
 }
@@ -284,6 +388,7 @@ export function computeValueSeries(
   transactions: Transaction[],
   assets: Asset[],
   historicalByAsset: Record<string, MarketPrice[]>,
+  accounts: Account[] = [],
   fx: FxTable = DEFAULT_FX,
 ): ValuePoint[] {
   const first = firstTransactionDate(transactions)
@@ -311,9 +416,10 @@ export function computeValueSeries(
     }
     const cash = computeCash(upTo, fx)
     const invested = computeInvestedCapital(upTo, fx)
+    const livret = computeAllLivretInterest(accounts, upTo, fx, new Date(date))
     return {
       date,
-      totalValue: Math.round((holdings + cash) * 100) / 100,
+      totalValue: Math.round((holdings + cash + livret.credited + livret.accrued) * 100) / 100,
       invested: Math.round(invested * 100) / 100,
     }
   })

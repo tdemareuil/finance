@@ -32,6 +32,8 @@ accessible depuis plusieurs appareils).
 - Dashboard synthétique, évolution du patrimoine, allocations (compte / type / devise / secteur / pays)
 - Dividendes reçus par mois et par actif, rendement sur coût, calendrier des dividendes
 - Frais cumulés et frais par compte
+- **Intérêts Livret+ calculés automatiquement** (règle française des quinzaines, capitalisation
+  au 31/12) à partir d'un taux annuel configurable par compte
 - Page détail d'un actif en **onglets** (Résumé, Performance, Analyse, Transactions, Dividendes)
   avec widget **TradingView** et historique de cours
 - Onglet **Analyse** (via **Finnhub**) : consensus analystes, objectifs de cours, tendance des
@@ -60,6 +62,9 @@ npm install
    - Si vous aviez déjà appliqué le schéma **avant** l'ajout de la section Analyse,
      exécutez aussi [`supabase/migration_finnhub_symbol.sql`](supabase/migration_finnhub_symbol.sql)
      (`alter table assets add column if not exists finnhub_symbol text;`).
+   - Pour l'auto-calcul des intérêts Livret+, exécutez également
+     [`supabase/migration_account_interest_rate.sql`](supabase/migration_account_interest_rate.sql)
+     (`alter table accounts add column if not exists interest_rate numeric;`).
 4. Dans *Authentication → Providers*, laissez **Email** activé.
    Pour tester rapidement, vous pouvez désactiver la confirmation email
    (*Authentication → Sign In / Providers → Confirm email*).
@@ -93,8 +98,10 @@ npm run dev
 ```
 
 L'application démarre sur `http://localhost:5173`.
-Cliquez sur **« Explorer en mode démo »** pour un jeu de données fictif immédiat,
-ou créez un compte si Supabase est configuré.
+Connectez-vous avec votre email / mot de passe Supabase. En mode mono-utilisateur
+(`VITE_LOGIN_EMAIL` renseigné), seul le mot de passe est demandé (email pré-rempli).
+Les comptes se créent côté Supabase (dashboard *Authentication → Users*) : il n'y a plus
+d'inscription ni de mode démo dans l'interface de connexion.
 
 ## 5. Build
 
@@ -318,10 +325,18 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
 - **Cache** : résultats valides, **vides et erreurs** mis en cache (mémoire + LocalStorage), TTL par
   type. Les résultats mock sont aussi cachés (inoffensif car déterministes).
 
+### Intérêts Livret+ (implémenté)
+
+- Champ **taux annuel** par compte (fraction en base : `0.03` = 3 %).
+- `computeLivretInterest` (`portfolioCalculator.ts`) applique la **règle des quinzaines** :
+  versement productif à la quinzaine suivante, retrait cessant à la quinzaine courante ;
+  chaque quinzaine rapporte `taux/24` ; **capitalisation au 31/12** puis composition.
+- Les **intérêts crédités** (années révolues) alimentent le cash ; les **intérêts courus**
+  (année en cours, estimation) sont ajoutés à la valeur totale et affichés à part (Dashboard, Comptes).
+- ⚠️ Avec l'auto-calcul, **ne saisissez pas** les intérêts en tant que dépôts manuels (double comptage).
+
 ### Optimisations possibles / TODO
 
-- Auto-calcul des **intérêts Livret+** à un taux configurable par compte (aujourd'hui : saisir
-  les intérêts comme dépôts manuels, cf. données démo « Intérêts Livret+ »).
 - Taux de change réel + conversion par date.
 - Benchmark TWR/MWR ; snapshots quotidiens persistés (`portfolio_snapshots`).
 - **Code-splitting** : `xlsx` déjà lazy ; découper Recharts / par route (bundle ~250 kB gzip).

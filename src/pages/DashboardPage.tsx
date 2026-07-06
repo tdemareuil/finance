@@ -68,6 +68,14 @@ export default function DashboardPage() {
         />
         <StatCard label="Dividendes reçus" value={formatMoney(s.dividendsReceived)} tone="positive" />
         <StatCard label="Frais payés" value={formatMoney(s.feesPaid)} tone="negative" />
+        {(s.livretInterestAccrued > 0 || s.livretInterestCredited > 0) && (
+          <StatCard
+            label="Intérêts Livret+ (année en cours)"
+            value={formatMoney(s.livretInterestAccrued)}
+            tone="positive"
+            sub={`crédités à ce jour : ${formatMoney(s.livretInterestCredited)}`}
+          />
+        )}
       </div>
 
       <Card
