@@ -2,8 +2,12 @@ import { useState, type FormEvent } from 'react'
 import { Modal } from './ui'
 import { createTransaction, updateTransaction } from '../services/transactionService'
 import { createRsuGrant, updateRsuGrant } from '../services/rsuService'
+import { createAccount } from '../services/accountService'
+import { isInterestBearing } from '../services/portfolioCalculator'
+import { ACCOUNT_TYPE_LABEL } from '../utils'
 import type {
   Account,
+  AccountType,
   Asset,
   Currency,
   RsuGrant,
@@ -14,8 +18,13 @@ import type {
 } from '../types'
 
 // ---------------------------------------------------------------------------
-// Modale unique pour ajouter une opération : transaction (achat/vente/dividende
-// /dépôt/retrait/frais) OU grant RSU. Utilisée depuis le dashboard.
+// Modale d'ajout d'opération manuelle. Les opérations de bourse (achat/vente)
+// se font UNIQUEMENT par import CSV — la saisie manuelle couvre :
+//   • un grant RSU
+//   • un versement / retrait sur un livret ou plan d'épargne
+//     (Livret A, LDDS, Livret+, PER, PEE)
+// La modale sert aussi à l'ÉDITION d'une transaction ou d'un grant existants
+// (depuis la fiche d'un titre), auquel cas le formulaire complet est affiché.
 // ---------------------------------------------------------------------------
 
 const TYPE_LABEL: Record<TransactionType, string> = {
@@ -28,8 +37,7 @@ const TYPE_LABEL: Record<TransactionType, string> = {
 }
 const ASSET_TYPES: TransactionType[] = ['BUY', 'SELL', 'DIVIDEND']
 const TODAY = new Date().toISOString().slice(0, 10)
-
-type Mode = 'transaction' | 'rsu'
+const NEW_ACCOUNT = '__new__'
 
 function num(fd: FormData, k: string): number | undefined {
   const v = fd.get(k)
@@ -44,6 +52,8 @@ export default function AddOperationModal({
   userId,
   onClose,
   onSaved,
+  mode,
+  savingsType,
   editTransaction,
   editGrant,
 }: {
@@ -52,13 +62,22 @@ export default function AddOperationModal({
   userId: string
   onClose: () => void
   onSaved: () => void | Promise<void>
-  /** Si fourni : mode édition d'une transaction (pas de bascule). */
+  /** Création : type d'opération à saisir (choisi dans le menu « + »). */
+  mode?: 'rsu' | 'savings'
+  /** Création savings : type de livret / plan visé (Livret A, PER, …). */
+  savingsType?: AccountType
+  /** Si fourni : mode édition d'une transaction (formulaire complet). */
   editTransaction?: Transaction
-  /** Si fourni : mode édition d'un grant RSU (pas de bascule). */
+  /** Si fourni : mode édition d'un grant RSU. */
   editGrant?: RsuGrant
 }) {
-  const isEdit = !!(editTransaction || editGrant)
-  const [mode, setMode] = useState<Mode>(editGrant ? 'rsu' : 'transaction')
+  // Vue affichée, déterminée entièrement par les props.
+  const view: 'transaction' | 'rsu' | 'savings' = editTransaction
+    ? 'transaction'
+    : editGrant || mode === 'rsu'
+      ? 'rsu'
+      : 'savings'
+
   const [formType, setFormType] = useState<TransactionType>(editTransaction?.type ?? 'BUY')
   const [vestingType, setVestingType] = useState<VestingType>(editGrant?.vestingType ?? 'cliff')
   const [busy, setBusy] = useState(false)
@@ -67,6 +86,12 @@ export default function AddOperationModal({
   const isAssetType = ASSET_TYPES.includes(formType)
   const isAmountType = !['BUY', 'SELL'].includes(formType)
   const stockAssets = assets.filter((a) => a.type !== 'CASH')
+
+  // --- Savings (versement / retrait sur un livret) -------------------------
+  const savingsAccounts = accounts.filter((a) => a.type === savingsType)
+  const [savingsAccountId, setSavingsAccountId] = useState(savingsAccounts[0]?.id ?? NEW_ACCOUNT)
+  const savingsLabel = savingsType ? ACCOUNT_TYPE_LABEL[savingsType] : 'Épargne'
+  const interestBearing = savingsType ? isInterestBearing(savingsType) : false
 
   async function submitTransaction(fd: FormData) {
     const type = fd.get('type') as TransactionType
@@ -91,6 +116,38 @@ export default function AddOperationModal({
     }
     if (editTransaction) await updateTransaction(editTransaction.id, payload)
     else await createTransaction(payload)
+  }
+
+  async function submitSavings(fd: FormData) {
+    if (!savingsType) throw new Error('Type de compte manquant.')
+    const amount = num(fd, 'amount')
+    if (amount == null || amount <= 0) throw new Error('Saisissez un montant.')
+
+    // Compte cible : existant ou créé à la volée.
+    let accountId = String(fd.get('accountId') ?? '')
+    if (accountId === NEW_ACCOUNT || accountId === '') {
+      const rate = interestBearing ? num(fd, 'interestRatePct') : undefined
+      const created = await createAccount({
+        userId,
+        name: String(fd.get('accountName') ?? '').trim() || savingsLabel,
+        type: savingsType,
+        currency: 'EUR',
+        interestRate: rate != null ? rate / 100 : undefined,
+      })
+      accountId = created.id
+    }
+
+    const payload: Omit<Transaction, 'id' | 'createdAt'> = {
+      userId,
+      accountId,
+      type: fd.get('sens') === 'WITHDRAWAL' ? 'WITHDRAWAL' : 'DEPOSIT',
+      date: String(fd.get('date')),
+      amount,
+      currency: 'EUR',
+      note: String(fd.get('note') ?? '').trim() || undefined,
+      source: 'MANUAL',
+    }
+    await createTransaction(payload)
   }
 
   async function submitRsu(fd: FormData) {
@@ -118,7 +175,8 @@ export default function AddOperationModal({
     setError(null)
     const fd = new FormData(e.currentTarget)
     try {
-      if (mode === 'transaction') await submitTransaction(fd)
+      if (view === 'transaction') await submitTransaction(fd)
+      else if (view === 'savings') await submitSavings(fd)
       else await submitRsu(fd)
       await onSaved()
       onClose()
@@ -133,30 +191,13 @@ export default function AddOperationModal({
     ? 'Modifier la transaction'
     : editGrant
       ? 'Modifier le grant RSU'
-      : 'Ajouter une opération'
+      : view === 'rsu'
+        ? 'Ajouter un grant RSU'
+        : `Versement — ${savingsLabel}`
 
   return (
     <Modal title={title} onClose={onClose} wide>
-      {!isEdit && (
-        <div className="tabs" style={{ marginBottom: 16 }}>
-          <button
-            type="button"
-            className={`tab ${mode === 'transaction' ? 'active' : ''}`}
-            onClick={() => setMode('transaction')}
-          >
-            Transaction
-          </button>
-          <button
-            type="button"
-            className={`tab ${mode === 'rsu' ? 'active' : ''}`}
-            onClick={() => setMode('rsu')}
-          >
-            Grant RSU
-          </button>
-        </div>
-      )}
-
-      {mode === 'transaction' ? (
+      {view === 'transaction' ? (
         <form onSubmit={handleSubmit} className="form-grid form-grid-2">
           <label className="field">
             <span>Type</span>
@@ -211,9 +252,60 @@ export default function AddOperationModal({
               {busy ? 'Enregistrement…' : 'Enregistrer'}
             </button>
           </div>
-          {accounts.length === 0 && (
-            <div className="alert alert-warn form-span-2">Aucun compte : créez-en un avant d'ajouter une transaction.</div>
+        </form>
+      ) : view === 'savings' ? (
+        <form onSubmit={handleSubmit} className="form-grid form-grid-2">
+          <label className="field">
+            <span>Compte</span>
+            <select
+              name="accountId"
+              value={savingsAccountId}
+              onChange={(e) => setSavingsAccountId(e.target.value)}
+            >
+              {savingsAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              <option value={NEW_ACCOUNT}>+ Nouveau {savingsLabel}</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Sens</span>
+            <select name="sens" defaultValue="DEPOSIT">
+              <option value="DEPOSIT">Versement</option>
+              <option value="WITHDRAWAL">Retrait</option>
+            </select>
+          </label>
+
+          {savingsAccountId === NEW_ACCOUNT && (
+            <>
+              <label className="field">
+                <span>Nom du compte</span>
+                <input name="accountName" defaultValue={savingsLabel} placeholder={savingsLabel} />
+              </label>
+              {interestBearing && (
+                <label className="field">
+                  <span>Taux annuel % <span className="muted">(intérêts calculés auto.)</span></span>
+                  <input name="interestRatePct" type="number" step="any" min="0" placeholder="Ex : 3" />
+                </label>
+              )}
+            </>
           )}
+
+          <label className="field">
+            <span>Date</span>
+            <input type="date" name="date" defaultValue={TODAY} required />
+          </label>
+          <label className="field">
+            <span>Montant (€)</span>
+            <input name="amount" type="number" step="any" min="0" placeholder="1000" required />
+          </label>
+          <label className="field form-span-2"><span>Note</span><input name="note" placeholder="Optionnel" /></label>
+
+          {error && <div className="alert alert-error form-span-2">{error}</div>}
+          <div className="form-actions form-span-2">
+            <button type="button" className="btn btn-ghost" onClick={onClose}>Annuler</button>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
+              {busy ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
         </form>
       ) : (
         <form onSubmit={handleSubmit} className="form-grid form-grid-2">

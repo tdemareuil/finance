@@ -1,5 +1,6 @@
 import type {
   Account,
+  AccountType,
   Asset,
   Currency,
   MarketPrice,
@@ -7,6 +8,13 @@ import type {
   PortfolioSummary,
   Transaction,
 } from '../types'
+
+/** Types de compte porteurs d'intérêts (calcul automatique à la quinzaine). */
+export const INTEREST_BEARING_TYPES: AccountType[] = ['LIVRET_A', 'LDDS', 'LIVRET_PLUS']
+
+export function isInterestBearing(type: AccountType): boolean {
+  return INTEREST_BEARING_TYPES.includes(type)
+}
 
 // ---------------------------------------------------------------------------
 // Moteur de calcul du portefeuille (fonctions pures, testables).
@@ -250,7 +258,7 @@ export function computeAllLivretInterest(
   let credited = 0
   let accrued = 0
   for (const acc of accounts) {
-    if (acc.type !== 'LIVRET_PLUS' || !acc.interestRate) continue
+    if (!isInterestBearing(acc.type) || !acc.interestRate) continue
     const flows = transactions
       .filter((t) => t.accountId === acc.id && (t.type === 'DEPOSIT' || t.type === 'WITHDRAWAL'))
       .map((t) => ({ date: t.date, amount: (t.type === 'DEPOSIT' ? 1 : -1) * (t.amount ?? 0) }))

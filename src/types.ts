@@ -6,7 +6,14 @@ export type Currency = 'EUR' | 'USD'
 // ---------------------------------------------------------------------------
 // Account
 // ---------------------------------------------------------------------------
-export type AccountType = 'CTO' | 'PEA' | 'LIVRET_PLUS'
+export type AccountType =
+  | 'CTO'
+  | 'PEA'
+  | 'LIVRET_A'
+  | 'LDDS'
+  | 'LIVRET_PLUS'
+  | 'PER'
+  | 'PEE'
 
 export interface Account {
   id: string
@@ -14,7 +21,7 @@ export interface Account {
   name: string
   type: AccountType
   currency: Currency
-  /** Taux d'intérêt annuel (fraction, ex : 0.03 = 3%). Pertinent pour LIVRET_PLUS. */
+  /** Taux d'intérêt annuel (fraction, ex : 0.03 = 3%). Pertinent pour les livrets (Livret A, LDDS, Livret+). */
   interestRate?: number
   createdAt: string
 }

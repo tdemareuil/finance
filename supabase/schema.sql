@@ -17,7 +17,7 @@ create table if not exists public.accounts (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid not null references auth.users (id) on delete cascade,
   name          text not null,
-  type          text not null check (type in ('CTO', 'PEA', 'LIVRET_PLUS')),
+  type          text not null check (type in ('CTO', 'PEA', 'LIVRET_A', 'LDDS', 'LIVRET_PLUS', 'PER', 'PEE')),
   currency      text not null default 'EUR' check (currency in ('EUR', 'USD')),
   interest_rate numeric,
   created_at    timestamptz not null default now()

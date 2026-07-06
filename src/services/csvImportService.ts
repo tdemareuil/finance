@@ -13,6 +13,7 @@ import { createAsset } from './assetService'
 import { createTransactionsBulk } from './transactionService'
 import { createImportBatch, updateImportBatch } from './importBatchService'
 import { resolveSymbol } from './symbolLookupService'
+import { ACCOUNT_TYPE_LABEL } from '../utils'
 
 // ---------------------------------------------------------------------------
 // Import CSV générique avec mapping manuel des colonnes.
@@ -101,7 +102,7 @@ export interface BrokerImportResult {
   skipped: number
 }
 
-const ACCOUNT_LABEL: Record<AccountType, string> = { CTO: 'CTO', PEA: 'PEA', LIVRET_PLUS: 'Livret+' }
+const ACCOUNT_LABEL = ACCOUNT_TYPE_LABEL
 
 export function isExcelFile(file: File): boolean {
   return /\.xlsx?$/i.test(file.name)

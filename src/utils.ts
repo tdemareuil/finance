@@ -1,4 +1,4 @@
-import type { Asset, Currency, Position, Transaction } from './types'
+import type { AccountType, Asset, Currency, Position, Transaction } from './types'
 import { DEFAULT_FX, toEur, type FxTable } from './services/portfolioCalculator'
 
 // ===========================================================================
@@ -72,6 +72,17 @@ export function initTheme(): void {
 }
 
 // --- Niveau de risque (heuristique) ----------------------------------------
+// --- Comptes ---------------------------------------------------------------
+export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
+  CTO: 'CTO',
+  PEA: 'PEA',
+  LIVRET_A: 'Livret A',
+  LDDS: 'LDDS',
+  LIVRET_PLUS: 'Livret+',
+  PER: 'PER',
+  PEE: 'PEE',
+}
+
 export type RiskLevel = 'Faible' | 'Modéré' | 'Élevé'
 export const RISK_ORDER: RiskLevel[] = ['Faible', 'Modéré', 'Élevé']
 

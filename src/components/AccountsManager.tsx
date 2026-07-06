@@ -4,10 +4,8 @@ import { useAuth } from '../context/AuthContext'
 import { Card, EmptyState, Modal } from './ui'
 import { createAccount, deleteAccount, updateAccount } from '../services/accountService'
 import type { Account, AccountType, Currency } from '../types'
-import { formatMoney } from '../utils'
-import { computeCash, computeLivretInterest } from '../services/portfolioCalculator'
-
-const TYPE_LABEL: Record<AccountType, string> = { CTO: 'CTO', PEA: 'PEA', LIVRET_PLUS: 'Livret+' }
+import { ACCOUNT_TYPE_LABEL, formatMoney } from '../utils'
+import { computeCash, computeLivretInterest, isInterestBearing } from '../services/portfolioCalculator'
 
 // Gestion des comptes (CRUD) — section intégrée à la page Paramètres.
 export default function AccountsManager() {
@@ -73,7 +71,7 @@ export default function AccountsManager() {
       action={<button className="btn btn-sm btn-primary" onClick={() => setCreating(true)}>+ Nouveau compte</button>}
     >
       {accounts.length === 0 ? (
-        <EmptyState title="Aucun compte" hint="Créez un CTO, un PEA ou un Livret+ pour commencer." />
+        <EmptyState title="Aucun compte" hint="Créez un CTO, un PEA ou un livret pour commencer." />
       ) : (
         <div className="table-scroll">
           <table className="table">
@@ -94,7 +92,7 @@ export default function AccountsManager() {
                 const accountTx = transactions.filter((t) => t.accountId === a.id)
                 const cash = computeCash(accountTx)
                 const interest =
-                  a.type === 'LIVRET_PLUS' && a.interestRate
+                  isInterestBearing(a.type) && a.interestRate
                     ? computeLivretInterest(
                         accountTx
                           .filter((t) => t.type === 'DEPOSIT' || t.type === 'WITHDRAWAL')
@@ -106,7 +104,7 @@ export default function AccountsManager() {
                 return (
                   <tr key={a.id}>
                     <td>{a.name}</td>
-                    <td><span className="chip chip-default">{TYPE_LABEL[a.type]}</span></td>
+                    <td><span className="chip chip-default">{ACCOUNT_TYPE_LABEL[a.type]}</span></td>
                     <td>{a.currency}</td>
                     <td className="num">{a.interestRate ? `${(a.interestRate * 100).toFixed(2)} %` : '—'}</td>
                     <td className="num">{txCountFor(a.id)}</td>
@@ -137,9 +135,9 @@ export default function AccountsManager() {
             <label className="field">
               <span>Type</span>
               <select name="type" defaultValue={current?.type ?? 'CTO'}>
-                <option value="CTO">CTO</option>
-                <option value="PEA">PEA</option>
-                <option value="LIVRET_PLUS">Livret+</option>
+                {(Object.keys(ACCOUNT_TYPE_LABEL) as AccountType[]).map((t) => (
+                  <option key={t} value={t}>{ACCOUNT_TYPE_LABEL[t]}</option>
+                ))}
               </select>
             </label>
             <label className="field">
@@ -150,7 +148,7 @@ export default function AccountsManager() {
               </select>
             </label>
             <label className="field">
-              <span>Taux annuel % <span className="muted">(Livret+ : intérêts calculés automatiquement)</span></span>
+              <span>Taux annuel % <span className="muted">(Livret A · LDDS · Livret+ : intérêts calculés automatiquement)</span></span>
               <input
                 name="interestRatePct"
                 type="number"

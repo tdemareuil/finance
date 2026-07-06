@@ -1,9 +1,10 @@
 # 💰 Patrimoine — Dashboard patrimonial personnel
 
-Prototype de suivi de portefeuille d'investissement (comptes **CTO**, **PEA**, **Livret+**)
-sans connexion directe aux brokers (Trade Republic, Fortuneo…). Les données sont saisies
-manuellement ou importées via CSV, et stockées dans **Supabase** (source de vérité,
-accessible depuis plusieurs appareils).
+Prototype de suivi de portefeuille d'investissement (comptes **CTO**, **PEA**, **Livret A**,
+**LDDS**, **Livret+**, **PER**, **PEE**) sans connexion directe aux brokers (Trade Republic,
+Fortuneo…). Les opérations de bourse sont importées via CSV, les grants RSU et versements sur
+livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supabase**
+(source de vérité, accessible depuis plusieurs appareils).
 
 > ⚠️ **Prototype.** Aucune donnée réelle ni clé API n'est présente dans le dépôt.
 > L'application fonctionne immédiatement en **mode démo** (données fictives locales), et
@@ -21,9 +22,10 @@ accessible depuis plusieurs appareils).
 ## Fonctionnalités
 
 - Authentification email/mot de passe (Supabase), sessions persistantes, routes protégées
-- **Gestion des comptes et actifs** (CRUD, taux Livret+, symboles TradingView/Finnhub/EODHD)
-  regroupée dans **Paramètres** ; les **transactions** et **grants RSU** se créent via le bouton
-  « + Ajouter une opération » et s'éditent/suppriment depuis la fiche du titre concerné
+- **Gestion des comptes et actifs** (CRUD, taux des livrets, symboles TradingView/Finnhub/EODHD)
+  regroupée dans **Paramètres** ; les opérations de bourse s'importent par CSV, les **grants RSU**
+  et **versements sur livrets** se saisissent via le menu **« + »** et s'éditent/suppriment depuis
+  la fiche du titre ou la gestion des comptes
 - Import CSV (ouvert via un bouton depuis le Portefeuille) : aperçu, détection d'erreurs et de
   doublons, création automatique des comptes/actifs manquants, `ImportBatch`
 - Import **Fortuneo** : instantané `.xls` (positions → achat au **PRU réel**) **ou** historique
@@ -38,14 +40,16 @@ accessible depuis plusieurs appareils).
   évolution du patrimoine vs benchmark, liste **« Mes titres »** groupée au choix par
   **compte / type / niveau de risque**, et allocations (compte / type / devise / secteur / pays)
   regroupées dans une seule tuile
-- Bouton **« + Ajouter une opération »** : saisie d'une transaction **ou** d'un grant **RSU**
+- Depuis le Portefeuille : bouton **« 📥 Importer un CSV »** puis un menu **« + »** pour la saisie
+  manuelle — **grant RSU** ou **versement/retrait** sur un livret ou plan d'épargne (Livret A, LDDS,
+  Livret+, PER, PEE). Les achats/ventes de bourse passent uniquement par l'import CSV
 - **Barre de recherche globale** (Finnhub, dans la barre supérieure) par nom / ticker / ISIN, avec
   fiche marché rapide (graphique TradingView + analyse : consensus, objectifs, news, fondamentaux)
 - **RSU** : grants avec calendrier de **vesting** (cliff ou mensuel), plateforme (EquatePlus / Carta),
   suivi des actions acquises / à venir — affichés sur la fiche du titre concerné
 - Dividendes reçus par mois et par actif, rendement sur coût, calendrier des dividendes
-- **Intérêts Livret+ calculés automatiquement** (règle française des quinzaines, capitalisation
-  au 31/12) à partir d'un taux annuel configurable par compte
+- **Intérêts des livrets calculés automatiquement** (Livret A, LDDS, Livret+ — règle française des
+  quinzaines, capitalisation au 31/12) à partir d'un taux annuel configurable par compte
 - Page détail d'un actif en **onglets** (Performance, Analyse, Transactions) : l'onglet
   **Performance** regroupe le graphique **TradingView** (mode région, thème sombre), les métriques
   de la ligne, le **vesting RSU** et les **dividendes** (reçus, historique du titre, à venir)
@@ -80,7 +84,8 @@ npm install
      [`migration_finnhub_symbol.sql`](supabase/migration_finnhub_symbol.sql) (colonne `finnhub_symbol`),
      [`migration_account_interest_rate.sql`](supabase/migration_account_interest_rate.sql) (colonne `interest_rate`),
      [`migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql) (dédup `external_id` + index unique),
-     [`migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql) (table `rsu_grants` + RLS).
+     [`migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql) (table `rsu_grants` + RLS),
+     [`migration_account_types.sql`](supabase/migration_account_types.sql) (types de compte Livret A / LDDS / PER / PEE).
 4. Créez votre utilisateur dans *Authentication → Users → Add user* (il n'y a pas d'inscription
    en libre-service dans l'app). Laissez le provider **Email** activé ; pour tester rapidement,
    vous pouvez désactiver la confirmation email (*Authentication → Sign In / Providers → Confirm email*).
@@ -400,17 +405,23 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
   donnée s'affiche.
 - **Niveau de risque** : classification **heuristique** sans champ dédié (`assetRisk` dans `utils.ts`) —
   Liquidités = Faible, ETF = Modéré, Action = Élevé. *Alternative :* champ `risk` éditable en base.
-- **RSU sur la fiche du titre** : plus d'onglet RSU global ; les grants (saisis via « + Ajouter une
-  opération ») s'affichent sur la fiche de l'action concernée (onglet Performance).
+- **Saisie manuelle restreinte** : le menu **« + »** ne propose que ce qui n'a pas de source CSV —
+  grants **RSU** et **versements/retraits** sur livrets (Livret A, LDDS, Livret+, PER, PEE). Un
+  versement crée le compte cible à la volée s'il n'existe pas encore. Les achats/ventes de bourse
+  ne se saisissent plus à la main (import CSV uniquement), mais restent **éditables** depuis la
+  fiche du titre (transactions issues d'un import).
+- **RSU sur la fiche du titre** : plus d'onglet RSU global ; les grants (saisis via le menu « + »)
+  s'affichent sur la fiche de l'action concernée (onglet Performance).
 - **Recherche globale** : `instrumentSearchService` interroge Finnhub `/search` (cache mémoire 5 min) ;
   la fiche rapide réutilise le composant `AssetAnalysis` (vrai actif si en portefeuille, sinon actif
   synthétique construit depuis le résultat).
 - **Graphique TradingView** : mode région (`style: 3`), thème calqué sur l'app (sombre par défaut),
   hauteur fixée (220 px) via la config du widget (`autosize` ne récupérait pas la hauteur du conteneur).
 
-### Intérêts Livret+ (implémenté)
+### Intérêts des livrets (implémenté)
 
-- Champ **taux annuel** par compte (fraction en base : `0.03` = 3 %).
+- Champ **taux annuel** par compte (fraction en base : `0.03` = 3 %). S'applique aux types
+  porteurs d'intérêts (`isInterestBearing` : **Livret A**, **LDDS**, **Livret+**).
 - `computeLivretInterest` (`portfolioCalculator.ts`) applique la **règle des quinzaines** :
   versement productif à la quinzaine suivante, retrait cessant à la quinzaine courante ;
   chaque quinzaine rapporte `taux/24` ; **capitalisation au 31/12** puis composition.

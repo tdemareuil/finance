@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
@@ -15,6 +15,22 @@ import {
   allocationByType,
 } from '../utils'
 import { formatMoney, formatPct, signClass } from '../utils'
+import type { AccountType } from '../types'
+
+// Opérations saisissables manuellement (le menu « + »). Les opérations de
+// bourse (achat/vente) passent exclusivement par l'import CSV.
+type Op =
+  | { key: string; label: string; mode: 'rsu' }
+  | { key: string; label: string; mode: 'savings'; savingsType: AccountType }
+
+const OPS: Op[] = [
+  { key: 'rsu', label: 'Grant RSU', mode: 'rsu' },
+  { key: 'livret-a', label: 'Livret A', mode: 'savings', savingsType: 'LIVRET_A' },
+  { key: 'ldds', label: 'LDDS', mode: 'savings', savingsType: 'LDDS' },
+  { key: 'livret-plus', label: 'Livret+', mode: 'savings', savingsType: 'LIVRET_PLUS' },
+  { key: 'per', label: 'PER', mode: 'savings', savingsType: 'PER' },
+  { key: 'pee', label: 'PEE', mode: 'savings', savingsType: 'PEE' },
+]
 
 export default function PortfolioPage() {
   const { user } = useAuth()
@@ -31,7 +47,25 @@ export default function PortfolioPage() {
     assets,
     reload,
   } = usePortfolio()
-  const [adding, setAdding] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [op, setOp] = useState<Op | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!menuOpen) return
+    function onDocClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
 
   if (loading) return <Loading label="Calcul du portefeuille…" />
 
@@ -48,12 +82,37 @@ export default function PortfolioPage() {
       <div className="page-head">
         <h1 className="page-title">Portefeuille</h1>
         <div className="page-head-actions">
-          <button className="btn btn-primary" onClick={() => setAdding(true)}>
-            + Ajouter une opération
-          </button>
           <Link className="btn btn-primary" to="/import">
             📥 Importer un CSV
           </Link>
+          <div className="dropdown" ref={menuRef}>
+            <button
+              className="btn btn-primary btn-icon"
+              aria-label="Ajouter une opération"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              +
+            </button>
+            {menuOpen && (
+              <div className="dropdown-menu" role="menu">
+                {OPS.map((o) => (
+                  <button
+                    key={o.key}
+                    role="menuitem"
+                    className="dropdown-item"
+                    onClick={() => {
+                      setOp(o)
+                      setMenuOpen(false)
+                    }}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -62,8 +121,8 @@ export default function PortfolioPage() {
           title="Aucune transaction pour le moment"
           hint={
             <>
-              Ajoutez votre première opération avec le bouton{' '}
-              <strong>« + Ajouter une opération »</strong> ou <Link to="/import">importez un CSV</Link>.
+              <Link to="/import">Importez un CSV</Link> de votre courtier, ou ajoutez un grant RSU
+              ou un versement sur un livret avec le bouton <strong>« + »</strong>.
             </>
           }
         />
@@ -178,12 +237,14 @@ export default function PortfolioPage() {
         </>
       )}
 
-      {adding && user && (
+      {op && user && (
         <AddOperationModal
           accounts={accounts}
           assets={assets}
           userId={user.id}
-          onClose={() => setAdding(false)}
+          mode={op.mode}
+          savingsType={op.mode === 'savings' ? op.savingsType : undefined}
+          onClose={() => setOp(null)}
           onSaved={reload}
         />
       )}
