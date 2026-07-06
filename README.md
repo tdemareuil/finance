@@ -14,7 +14,7 @@ accessible depuis plusieurs appareils).
 - **React 18 + TypeScript + Vite**
 - **Supabase** (Auth + PostgreSQL avec Row Level Security)
 - **Recharts** pour les graphiques internes
-- **TradingView Widget** pour les graphiques détaillés d'actifs
+- **TradingView Widget** pour le graphique détaillé d'un actif (mode région, thème sombre)
 - **EODHD** pour les données de marché (cours, historiques, dividendes) — avec repli mock
 - **GitHub Pages** pour le déploiement
 
@@ -32,15 +32,25 @@ accessible depuis plusieurs appareils).
 - Calcul des positions : quantité, **PRU** (prix de revient moyen pondéré), coût d'acquisition,
   plus-values latente et réalisée, dividendes, frais
 - Performance globale et annualisée, comparaison avec un benchmark **MSCI World**
-- Dashboard synthétique, évolution du patrimoine, allocations (compte / type / devise / secteur / pays)
+- Page unique **Portefeuille** (tableau de bord + positions fusionnés, page par défaut) : synthèse,
+  évolution du patrimoine vs benchmark, liste **« Mes titres »** groupée au choix par
+  **compte / type / niveau de risque**, et allocations (compte / type / devise / secteur / pays)
+  regroupées dans une seule tuile
+- Bouton **« + Ajouter une opération »** : saisie d'une transaction **ou** d'un grant **RSU**
+- **Barre de recherche globale** (Finnhub, dans la barre supérieure) par nom / ticker / ISIN, avec
+  fiche marché rapide (graphique TradingView + analyse : consensus, objectifs, news, fondamentaux)
+- **RSU** : grants avec calendrier de **vesting** (cliff ou mensuel), plateforme (EquatePlus / Carta),
+  suivi des actions acquises / à venir — affichés sur la fiche du titre concerné
 - Dividendes reçus par mois et par actif, rendement sur coût, calendrier des dividendes
-- Frais cumulés et frais par compte
 - **Intérêts Livret+ calculés automatiquement** (règle française des quinzaines, capitalisation
   au 31/12) à partir d'un taux annuel configurable par compte
-- Page détail d'un actif en **onglets** (Résumé, Performance, Analyse, Transactions, Dividendes)
-  avec widget **TradingView** et historique de cours
+- Page détail d'un actif en **onglets** (Performance, Analyse, Transactions) : l'onglet
+  **Performance** regroupe le graphique **TradingView** (mode région, thème sombre), les métriques
+  de la ligne, le **vesting RSU** et les **dividendes** (reçus, historique du titre, à venir)
 - Onglet **Analyse** (via **Finnhub**) : consensus analystes, objectifs de cours, tendance des
   recommandations, actualités récentes, fondamentaux clés — avec repli mock
+- Messages de connexion explicites : distinguent un **serveur injoignable / bloqué** (projet Supabase
+  en pause, filtrage réseau) d'un **mot de passe incorrect**
 
 ---
 
@@ -71,6 +81,9 @@ npm install
    - Pour la déduplication des imports, exécutez
      [`supabase/migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql)
      (colonne `external_id` + index unique `(user_id, external_id)`).
+   - Pour les **grants RSU**, exécutez
+     [`supabase/migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql)
+     (table `rsu_grants` + index + RLS + policies).
 4. Dans *Authentication → Providers*, laissez **Email** activé.
    Pour tester rapidement, vous pouvez désactiver la confirmation email
    (*Authentication → Sign In / Providers → Confirm email*).
@@ -131,7 +144,7 @@ déploie à chaque push sur `main`.
    et `VITE_FINNHUB_API_KEY`. (Optionnel : variable `VITE_DEFAULT_BENCHMARK`.)
 3. Poussez sur `main`. `VITE_BASE` est renseigné automatiquement avec `/<nom-du-repo>/`.
 
-> Le routing utilise `HashRouter` (`/#/dashboard`) : aucune configuration serveur SPA
+> Le routing utilise `HashRouter` (`/#/portfolio`) : aucune configuration serveur SPA
 > n'est nécessaire, et le rafraîchissement de page fonctionne sur GitHub Pages.
 
 ### Manuel
@@ -365,6 +378,18 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
   accessible uniquement via le flag LocalStorage `patrimoine-demo-session`.
 - **Cache** : résultats valides, **vides et erreurs** mis en cache (mémoire + LocalStorage), TTL par
   type. Les résultats mock sont aussi cachés (inoffensif car déterministes).
+- **Navigation consolidée** : Dashboard et Portefeuille fusionnés en une page **Portefeuille**
+  (route par défaut ; `/dashboard` redirige). Les menus Transactions / Comptes / Actifs / RSU sont
+  retirés (routes conservées). *Alternative :* réintroduire des entrées de menu si l'app grossit.
+- **Niveau de risque** : classification **heuristique** sans champ dédié (`utils/risk.ts`) —
+  Liquidités = Faible, ETF = Modéré, Action = Élevé. *Alternative :* champ `risk` éditable en base.
+- **RSU sur la fiche du titre** : plus d'onglet RSU global ; les grants (saisis via « + Ajouter une
+  opération ») s'affichent sur la fiche de l'action concernée (onglet Performance).
+- **Recherche globale** : `instrumentSearchService` interroge Finnhub `/search` (cache mémoire 5 min) ;
+  la fiche rapide réutilise le composant `AssetAnalysis` (vrai actif si en portefeuille, sinon actif
+  synthétique construit depuis le résultat).
+- **Graphique TradingView** : mode région (`style: 3`), thème calqué sur l'app (sombre par défaut),
+  hauteur fixée (220 px) via la config du widget (`autosize` ne récupérait pas la hauteur du conteneur).
 
 ### Intérêts Livret+ (implémenté)
 
@@ -404,20 +429,29 @@ Réimporter le même fichier, ou des fichiers qui se chevauchent, **ne crée jam
 
 ## Structure du projet
 
+La barre latérale n'expose que **Portefeuille · Dividendes · Import CSV · Paramètres**.
+Les pages Comptes / Actifs / Transactions / RSU existent toujours (routes accessibles par URL,
+CRUD conservé) mais ne sont plus des entrées de menu ; leurs actions courantes passent par la page
+Portefeuille (bouton « + Ajouter une opération ») et la fiche d'un titre.
+
 ```
 src/
-  components/   auth, layout, charts, assets, common (UI)
+  components/   auth, layout, charts, assets, dashboard (HoldingsGrouped,
+                AddOperationModal), search (GlobalSearch), common (UI)
   context/      AuthContext, PortfolioContext
-  pages/        Login, Dashboard, Accounts, Assets, Transactions,
-                CsvImport, Portfolio, AssetDetail, Dividends, Settings
+  pages/        Login, Portfolio (page par défaut), AssetDetail, Dividends,
+                CsvImport, Settings ; Accounts, Assets, Transactions, Rsu
+                (routes seules, hors menu)
   services/     supabaseClient, dataMode, localStore, rowMappers,
-                accountService, assetService, transactionService,
+                accountService, assetService, transactionService, rsuService,
                 dividendService, importBatchService, csvImportService,
+                instrumentSearchService, symbolLookupService,
                 marketDataService, analysisService, apiCacheService, consensus,
-                portfolioCalculator, benchmarkService
+                portfolioCalculator, rsuCalculator, benchmarkService
     providers/  types, eodhdProvider, finnhubProvider, fmpProvider, mockProvider
   data/         mockMarketData, mockAnalysisData, demoData
-  utils/        format, aggregations
+  utils/        format, aggregations, risk, theme
   types/        index.ts
-supabase/       schema.sql (tables + RLS + policies)
+supabase/       schema.sql (tables + RLS + policies) + migrations (finnhub_symbol,
+                account_interest_rate, transaction_external_id, rsu_grants)
 ```
