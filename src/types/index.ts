@@ -1,0 +1,177 @@
+// Modèle de données central de l'application.
+// Ces types reflètent le schéma Supabase (voir supabase/schema.sql).
+
+export type Currency = 'EUR' | 'USD'
+
+// ---------------------------------------------------------------------------
+// Account
+// ---------------------------------------------------------------------------
+export type AccountType = 'CTO' | 'PEA' | 'LIVRET_PLUS'
+
+export interface Account {
+  id: string
+  userId: string
+  name: string
+  type: AccountType
+  currency: Currency
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Asset
+// ---------------------------------------------------------------------------
+export type AssetType = 'STOCK' | 'ETF' | 'CASH'
+
+export interface Asset {
+  id: string
+  userId: string
+  name: string
+  ticker: string
+  exchange?: string
+  isin?: string
+  currency: Currency
+  type: AssetType
+  sector?: string
+  country?: string
+  tradingViewSymbol?: string
+  eodhdSymbol?: string
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Transaction
+// ---------------------------------------------------------------------------
+export type TransactionType =
+  | 'BUY'
+  | 'SELL'
+  | 'DIVIDEND'
+  | 'FEE'
+  | 'DEPOSIT'
+  | 'WITHDRAWAL'
+
+export type TransactionSource = 'MANUAL' | 'CSV_IMPORT'
+
+export interface Transaction {
+  id: string
+  userId: string
+  accountId: string
+  assetId?: string
+  type: TransactionType
+  date: string // ISO date (YYYY-MM-DD)
+  quantity?: number
+  price?: number
+  fees?: number
+  currency: Currency
+  amount?: number
+  note?: string
+  source?: TransactionSource
+  importBatchId?: string
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// PortfolioSnapshot
+// ---------------------------------------------------------------------------
+export interface PortfolioSnapshot {
+  id: string
+  userId: string
+  date: string
+  totalValue: number
+  investedCapital: number
+  cash: number
+  unrealizedPnL: number
+  realizedPnL: number
+  dividendsReceived: number
+  feesPaid: number
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// MarketPrice
+// ---------------------------------------------------------------------------
+export interface MarketPrice {
+  assetId: string
+  date: string
+  close: number
+  currency: Currency
+}
+
+// ---------------------------------------------------------------------------
+// DividendEvent
+// ---------------------------------------------------------------------------
+export interface DividendEvent {
+  id: string
+  userId: string
+  assetId: string
+  exDate?: string
+  paymentDate?: string
+  amountPerShare: number
+  currency: Currency
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// ImportBatch
+// ---------------------------------------------------------------------------
+export type Broker = 'TRADE_REPUBLIC' | 'FORTUNEO' | 'GENERIC'
+export type ImportStatus = 'PENDING' | 'IMPORTED' | 'FAILED'
+
+export interface ImportBatch {
+  id: string
+  userId: string
+  fileName: string
+  broker?: Broker
+  status: ImportStatus
+  createdAt: string
+}
+
+// ---------------------------------------------------------------------------
+// Types dérivés (calculés côté client, non persistés)
+// ---------------------------------------------------------------------------
+
+/** Position agrégée pour un actif dans un compte donné. */
+export interface Position {
+  assetId: string
+  accountId: string
+  asset: Asset
+  account: Account
+  quantity: number
+  /** Prix de revient unitaire moyen pondéré (PRU). */
+  averageCost: number
+  /** Coût total d'acquisition des titres encore détenus. */
+  totalCost: number
+  feesPaid: number
+  realizedPnL: number
+  dividendsReceived: number
+  currentPrice: number | null
+  currentValue: number | null
+  unrealizedPnL: number | null
+  performancePct: number | null
+  /** Poids dans le portefeuille total (0..1). */
+  weight: number
+  currency: Currency
+}
+
+/** Résumé global du portefeuille. */
+export interface PortfolioSummary {
+  totalValue: number
+  investedCapital: number
+  cash: number
+  unrealizedPnL: number
+  realizedPnL: number
+  dividendsReceived: number
+  feesPaid: number
+  /** Performance simple = (valeur + réalisé + dividendes - investi) / investi. */
+  totalReturnPct: number | null
+  annualizedReturnPct: number | null
+  positions: Position[]
+}
+
+/** Ligne du calendrier de dividendes. */
+export interface DividendCalendarEntry {
+  asset: Asset
+  event: DividendEvent
+  quantityHeld: number
+  estimatedAmount: number
+  status: 'PREVU' | 'RECU'
+}
