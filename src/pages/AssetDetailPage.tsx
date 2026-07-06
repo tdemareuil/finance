@@ -297,11 +297,17 @@ export default function AssetDetailPage() {
                 <thead>
                   <tr>
                     <th>Date</th><th>Type</th><th>Compte</th>
-                    <th className="num">Qté</th><th className="num">Prix</th><th className="num">Frais</th><th className="num">Montant</th><th></th>
+                    <th className="num">Qté</th><th className="num">Prix</th><th className="num">Frais</th><th className="num">Montant</th>
+                    <th className="num">Coût total</th><th className="num">Montant investi</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {assetTx.map((t) => (
+                  {assetTx.map((t) => {
+                    // Base = quantité × prix (trades) sinon montant ; coût total = base + frais.
+                    const base = t.quantity != null && t.price != null ? t.quantity * t.price : (t.amount ?? 0)
+                    const fees = t.fees ?? 0
+                    const totalCost = base + fees
+                    return (
                     <tr key={t.id}>
                       <td>{formatDate(t.date)}</td>
                       <td><span className={`chip chip-${t.type.toLowerCase()}`}>{TX_LABEL[t.type]}</span></td>
@@ -310,12 +316,15 @@ export default function AssetDetailPage() {
                       <td className="num">{t.price != null ? formatMoney(t.price, t.currency) : '—'}</td>
                       <td className="num">{t.fees != null ? formatMoney(t.fees, t.currency) : '—'}</td>
                       <td className="num">{t.amount != null ? formatMoney(t.amount, t.currency) : '—'}</td>
+                      <td className="num">{formatMoney(totalCost, t.currency)}</td>
+                      <td className="num">{formatMoney(base, t.currency)}</td>
                       <td className="row-actions">
                         <button className="btn btn-sm btn-ghost" onClick={() => setEditTx(t)}>Modifier</button>
                         <button className="btn btn-sm btn-danger-ghost" onClick={() => handleDeleteTx(t)}>Suppr.</button>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

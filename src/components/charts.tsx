@@ -169,8 +169,8 @@ export function AllocationPie({ data }: { data: AllocationSlice[] }) {
             nameKey="name"
             cx="50%"
             cy="50%"
-            innerRadius={55}
-            outerRadius={90}
+            innerRadius="55%"
+            outerRadius="85%"
             paddingAngle={2}
           >
             {filtered.map((_, i) => (

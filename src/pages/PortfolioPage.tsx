@@ -51,7 +51,7 @@ export default function PortfolioPage() {
           <button className="btn btn-primary" onClick={() => setAdding(true)}>
             + Ajouter une opération
           </button>
-          <Link className="btn btn-ghost" to="/import">
+          <Link className="btn btn-primary" to="/import">
             📥 Importer un CSV
           </Link>
         </div>
