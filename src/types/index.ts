@@ -69,6 +69,8 @@ export interface Transaction {
   note?: string
   source?: TransactionSource
   importBatchId?: string
+  /** Identifiant unique fourni par la source (ex : transaction_id Trade Republic) — sert à la déduplication. */
+  externalId?: string
   createdAt: string
 }
 

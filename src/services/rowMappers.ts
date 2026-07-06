@@ -94,6 +94,7 @@ export function rowToTransaction(r: Record<string, any>): Transaction {
     note: r.note ?? undefined,
     source: r.source ?? undefined,
     importBatchId: r.import_batch_id ?? undefined,
+    externalId: r.external_id ?? undefined,
     createdAt: r.created_at,
   }
 }
@@ -114,6 +115,7 @@ export function transactionToRow(t: Partial<Transaction>): Record<string, unknow
     note: t.note,
     source: t.source,
     import_batch_id: t.importBatchId,
+    external_id: t.externalId,
   })
 }
 

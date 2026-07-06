@@ -29,7 +29,7 @@ type Broker = 'GENERIC' | 'TRADE_REPUBLIC' | 'FORTUNEO' | 'AUTO'
 const COLUMN_LABEL: Record<GenericColumn, string> = {
   date: 'Date', account: 'Compte', type: 'Type', assetName: 'Nom actif', ticker: 'Ticker',
   isin: 'ISIN', quantity: 'Quantité', price: 'Prix', fees: 'Frais', amount: 'Montant',
-  currency: 'Devise', note: 'Note',
+  currency: 'Devise', note: 'Note', externalId: 'ID externe (dédup)',
 }
 
 export default function CsvImportPage() {

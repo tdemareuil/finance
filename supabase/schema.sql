@@ -61,8 +61,16 @@ create table if not exists public.transactions (
   note             text,
   source           text default 'MANUAL' check (source in ('MANUAL', 'CSV_IMPORT')),
   import_batch_id  uuid,
+  external_id      text,
   created_at       timestamptz not null default now()
 );
+
+-- Empêche tout doublon d'import : un même identifiant source ne peut exister
+-- qu'une fois par utilisateur (les transactions manuelles ont external_id null,
+-- non concernées par la contrainte).
+create unique index if not exists uq_tx_user_external
+  on public.transactions (user_id, external_id)
+  where external_id is not null;
 
 -- ---------------------------------------------------------------------
 -- portfolio_snapshots

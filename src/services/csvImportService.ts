@@ -31,10 +31,11 @@ export type GenericColumn =
   | 'amount'
   | 'currency'
   | 'note'
+  | 'externalId'
 
 export const GENERIC_COLUMNS: GenericColumn[] = [
   'date', 'account', 'type', 'assetName', 'ticker', 'isin',
-  'quantity', 'price', 'fees', 'amount', 'currency', 'note',
+  'quantity', 'price', 'fees', 'amount', 'currency', 'note', 'externalId',
 ]
 
 export const REQUIRED_COLUMNS: GenericColumn[] = ['date', 'account', 'type']
@@ -301,6 +302,8 @@ export function parseTradeRepublicCsv(parsed: ParsedCsv, accountName: string): B
       amount: !isTrade && amount != null ? String(Math.abs(amount)) : '',
       currency,
       note: (raw['description'] || rawType || '').trim().slice(0, 120),
+      // Identifiant unique Trade Republic → déduplication fiable des ré-imports.
+      externalId: (raw['transaction_id'] ?? '').trim(),
     })
   }
 
@@ -433,6 +436,7 @@ export function guessMapping(headers: string[]): ColumnMapping {
     amount: ['amount', 'montant', 'total', 'value', 'valeur'],
     currency: ['currency', 'devise', 'ccy'],
     note: ['note', 'notes', 'comment', 'commentaire', 'label', 'libelle2'],
+    externalId: ['externalid', 'transactionid', 'id', 'reference', 'operationid', 'ref'],
   }
   const mapping: ColumnMapping = {}
   for (const col of GENERIC_COLUMNS) {
@@ -509,6 +513,7 @@ export interface PreviewRow {
   amount?: number
   currency: Currency
   note?: string
+  externalId?: string
   // Résolution
   matchedAccountId?: string
   matchedAssetId?: string
@@ -533,8 +538,18 @@ function dupKey(t: {
   quantity?: number
   price?: number
   amount?: number
+  fees?: number
 }): string {
-  return [t.date, t.accountName.toLowerCase(), t.type, t.assetKey, t.quantity ?? '', t.price ?? '', t.amount ?? ''].join('|')
+  return [
+    t.date,
+    t.accountName.toLowerCase(),
+    t.type,
+    t.assetKey,
+    t.quantity ?? '',
+    t.price ?? '',
+    t.amount ?? '',
+    t.fees ?? '',
+  ].join('|')
 }
 
 /** Construit l'aperçu d'import : normalise, résout comptes/actifs, détecte doublons. */
@@ -555,26 +570,31 @@ export function buildImportPreview(
   const assetByIsin = new Map(assets.filter((a) => a.isin).map((a) => [a.isin!.trim().toLowerCase(), a]))
   const assetByName = new Map(assets.map((a) => [a.name.trim().toLowerCase(), a]))
 
-  // Clés de doublon des transactions existantes.
+  // Déduplication contre les transactions existantes :
+  //  1) par identifiant source (externalId) — le plus fiable ;
+  //  2) sinon par clé composite (date/compte/actif/type/quantité/prix/montant/frais),
+  //     l'actif étant identifié par son ID résolu (indépendant de ticker/isin/nom).
   const existingKeys = new Set<string>()
-  const assetIdName = new Map(assets.map((a) => [a.id, a]))
+  const existingExternalIds = new Set<string>()
+  const accountNameById = new Map(accounts.map((a) => [a.id, a.name]))
   for (const t of existingTransactions) {
-    const acc = accounts.find((a) => a.id === t.accountId)
-    const assetKey = t.assetId ? (assetIdName.get(t.assetId)?.ticker ?? t.assetId).toLowerCase() : ''
+    if (t.externalId) existingExternalIds.add(t.externalId)
     existingKeys.add(
       dupKey({
         date: t.date,
-        accountName: acc?.name ?? t.accountId,
+        accountName: accountNameById.get(t.accountId) ?? t.accountId,
         type: t.type,
-        assetKey,
+        assetKey: (t.assetId ?? '').toLowerCase(),
         quantity: t.quantity,
         price: t.price,
         amount: t.amount,
+        fees: t.fees,
       }),
     )
   }
 
   const seenInFile = new Set<string>()
+  const seenExternalIds = new Set<string>()
   const missingAccounts = new Set<string>()
   const missingAssetsMap = new Map<string, { name: string; ticker?: string; isin?: string; currency: Currency }>()
 
@@ -593,6 +613,7 @@ export function buildImportPreview(
     const amount = parseNumber(get(raw, 'amount'))
     const currency = normalizeCurrency(get(raw, 'currency'))
     const note = get(raw, 'note')?.trim() || undefined
+    const externalId = get(raw, 'externalId')?.trim() || undefined
 
     if (!date) messages.push('Date manquante ou invalide.')
     if (!accountName) messages.push('Compte manquant.')
@@ -633,16 +654,27 @@ export function buildImportPreview(
       }
     }
 
-    // Doublon
-    const assetKey = (ticker ?? isin ?? assetName ?? '').toLowerCase()
-    const k = dupKey({ date, accountName, type, assetKey, quantity, price, amount })
+    // Doublon. Si un identifiant source existe, il fait AUTORITÉ (deux opérations
+    // avec des id différents ne sont jamais fusionnées, même si tout le reste est
+    // identique). Sinon, repli sur la clé composite (actif = ID résolu).
+    const assetKey = (matchedAsset?.id ?? isin ?? ticker ?? assetName ?? '').toLowerCase()
+    const k = dupKey({ date, accountName, type, assetKey, quantity, price, amount, fees })
     let status: RowStatus = 'OK'
-    if (messages.length > 0) status = 'ERROR'
-    else if (existingKeys.has(k) || seenInFile.has(k)) {
-      status = 'DUPLICATE'
-      messages.push('Doublon probable (mêmes date/compte/actif/type/quantité/prix/montant).')
+    if (messages.length > 0) {
+      status = 'ERROR'
+    } else if (externalId) {
+      if (existingExternalIds.has(externalId) || seenExternalIds.has(externalId)) {
+        status = 'DUPLICATE'
+        messages.push('Déjà importé (même identifiant de transaction).')
+      }
+      seenExternalIds.add(externalId)
+    } else {
+      if (existingKeys.has(k) || seenInFile.has(k)) {
+        status = 'DUPLICATE'
+        messages.push('Doublon probable (mêmes date/compte/actif/type/quantité/prix/montant/frais).')
+      }
+      seenInFile.add(k)
     }
-    seenInFile.add(k)
 
     return {
       index,
@@ -661,6 +693,7 @@ export function buildImportPreview(
       amount,
       currency,
       note,
+      externalId,
       matchedAccountId: matchedAccount?.id,
       matchedAssetId: matchedAsset?.id,
       needsAccount,
@@ -816,6 +849,9 @@ export async function executeImport(
         currency: r.currency,
         amount: r.amount,
         note: r.note,
+        // Un doublon volontairement forcé est inséré SANS externalId pour ne pas
+        // heurter l'unicité (user_id, external_id).
+        externalId: r.status === 'DUPLICATE' ? undefined : r.externalId,
         source: 'CSV_IMPORT',
         importBatchId: batch.id,
       })

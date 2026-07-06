@@ -68,6 +68,9 @@ npm install
    - Pour l'auto-calcul des intérêts Livret+, exécutez également
      [`supabase/migration_account_interest_rate.sql`](supabase/migration_account_interest_rate.sql)
      (`alter table accounts add column if not exists interest_rate numeric;`).
+   - Pour la déduplication des imports, exécutez
+     [`supabase/migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql)
+     (colonne `external_id` + index unique `(user_id, external_id)`).
 4. Dans *Authentication → Providers*, laissez **Email** activé.
    Pour tester rapidement, vous pouvez désactiver la confirmation email
    (*Authentication → Sign In / Providers → Confirm email*).
@@ -372,6 +375,21 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
 - Les **intérêts crédités** (années révolues) alimentent le cash ; les **intérêts courus**
   (année en cours, estimation) sont ajoutés à la valeur totale et affichés à part (Dashboard, Comptes).
 - ⚠️ Avec l'auto-calcul, **ne saisissez pas** les intérêts en tant que dépôts manuels (double comptage).
+
+### Déduplication des imports (implémenté)
+
+Réimporter le même fichier, ou des fichiers qui se chevauchent, **ne crée jamais de doublon** :
+
+- **Identifiant source** (`external_id`) prioritaire : le `transaction_id` de Trade Republic est
+  stocké ; deux ré-imports du même fichier sont détectés à coup sûr, et deux opérations
+  distinctes mais identiques (ex : deux virements de 3 000 € le même jour) ne sont **jamais
+  fusionnées** car leurs id diffèrent.
+- **Sans id** (Fortuneo, générique) : repli sur une clé composite
+  (date + compte + actif *par ID résolu* + type + quantité + prix + montant + frais).
+- La déduplication s'exécute contre l'état **actuel** de la base à chaque import (aperçu avant
+  insertion), et un index unique `(user_id, external_id)` sert de garde-fou côté base.
+- Les doublons sont exclus par défaut ; l'utilisateur peut forcer leur insertion (ils sont alors
+  ré-enregistrés sans `external_id` pour ne pas heurter l'unicité).
 
 ### Optimisations possibles / TODO
 
