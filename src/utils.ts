@@ -87,8 +87,9 @@ export type RiskLevel = 'Faible' | 'Modéré' | 'Élevé'
 export const RISK_ORDER: RiskLevel[] = ['Faible', 'Modéré', 'Élevé']
 
 export function assetRisk(asset: Asset): RiskLevel {
+  // Liquidités / livrets = risque nul. ETF et actions = exposition marché actions,
+  // donc risque élevé (un ETF actions n'est pas un placement sûr).
   if (asset.type === 'CASH') return 'Faible'
-  if (asset.type === 'ETF') return 'Modéré'
   return 'Élevé'
 }
 

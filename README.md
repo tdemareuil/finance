@@ -404,7 +404,8 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
   **fiche du titre**. Un seul modèle : créer via le bouton d'ajout, consulter/éditer là où la
   donnée s'affiche.
 - **Niveau de risque** : classification **heuristique** sans champ dédié (`assetRisk` dans `utils.ts`) —
-  Liquidités = Faible, ETF = Modéré, Action = Élevé. *Alternative :* champ `risk` éditable en base.
+  Liquidités / livrets = Faible (risque nul), ETF **et** actions = Élevé (exposition marché actions).
+  *Alternative :* champ `risk` éditable en base.
 - **Saisie manuelle restreinte** : le menu **« + »** ne propose que ce qui n'a pas de source CSV —
   grants **RSU** et **versements/retraits** sur livrets (Livret A, LDDS, Livret+, PER, PEE). Un
   versement crée le compte cible à la volée s'il n'existe pas encore. Les achats/ventes de bourse
