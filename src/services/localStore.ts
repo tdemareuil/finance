@@ -6,7 +6,7 @@ import type {
   RsuGrant,
   Transaction,
 } from '../types'
-import { buildDemoData } from '../data/demoData'
+import { buildDemoData } from '../data'
 
 // ---------------------------------------------------------------------------
 // Store local pour le MODE DÉMO uniquement.

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { usePortfolio } from '../context/PortfolioContext'
-import { Card, EmptyState, Loading, StatCard } from '../components/common/ui'
-import MonthlyBarChart from '../components/charts/MonthlyBarChart'
-import AllocationPie from '../components/charts/AllocationPie'
-import { dividendsByAsset, dividendsByMonth } from '../utils/aggregations'
+import { Card, EmptyState, Loading, StatCard } from '../components/ui'
+import { MonthlyBarChart } from '../components/charts'
+import { AllocationPie } from '../components/charts'
+import { dividendsByAsset, dividendsByMonth } from '../utils'
 import { getDividends } from '../services/marketDataService'
 import type { DividendCalendarEntry, DividendEvent } from '../types'
-import { formatDate, formatMoney, formatNumber, formatPct } from '../utils/format'
+import { formatDate, formatMoney, formatNumber, formatPct } from '../utils'
 
 export default function DividendsPage() {
   const { transactions, assets, positions, summary, loading, dividendEvents } = usePortfolio()

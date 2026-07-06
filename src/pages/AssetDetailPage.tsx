@@ -1,15 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
-import { Card, EmptyState, Loading, StatCard } from '../components/common/ui'
-import TradingViewWidget from '../components/assets/TradingViewWidget'
-import AssetAnalysis from '../components/assets/AssetAnalysis'
+import { Card, EmptyState, Loading, StatCard } from '../components/ui'
+import TradingViewWidget from '../components/TradingViewWidget'
+import AssetAnalysis from '../components/AssetAnalysis'
+import AddOperationModal from '../components/AddOperationModal'
 import { getDividends } from '../services/marketDataService'
-import { listRsuGrants } from '../services/rsuService'
+import { listRsuGrants, deleteRsuGrant } from '../services/rsuService'
+import { deleteTransaction } from '../services/transactionService'
 import { computeVestingSummary } from '../services/rsuCalculator'
-import type { DividendEvent, RsuGrant } from '../types'
+import type { DividendEvent, RsuGrant, Transaction } from '../types'
 import { useAuth } from '../context/AuthContext'
-import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../utils/format'
+import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../utils'
 
 const TX_LABEL: Record<string, string> = {
   BUY: 'Achat', SELL: 'Vente', DIVIDEND: 'Dividende', FEE: 'Frais', DEPOSIT: 'Dépôt', WITHDRAWAL: 'Retrait',
@@ -25,25 +27,45 @@ const TABS: { key: Tab; label: string }[] = [
 export default function AssetDetailPage() {
   const { assetId } = useParams()
   const { user } = useAuth()
-  const { assets, positions, transactions, priceByAssetId, accounts, loading } = usePortfolio()
+  const { assets, positions, transactions, priceByAssetId, accounts, loading, reload } = usePortfolio()
   const [tab, setTab] = useState<Tab>('performance')
   const [divEvents, setDivEvents] = useState<DividendEvent[]>([])
   const [rsuGrants, setRsuGrants] = useState<RsuGrant[]>([])
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
+  const [editGrant, setEditGrant] = useState<RsuGrant | null>(null)
 
   const asset = assets.find((a) => a.id === assetId)
   const accountName = useMemo(() => new Map(accounts.map((a) => [a.id, a.name])), [accounts])
 
   // Grants RSU de l'utilisateur (filtrés sur cet actif à l'affichage).
-  useEffect(() => {
+  const reloadGrants = useCallback(() => {
     if (!user) return
-    let active = true
-    listRsuGrants(user.id)
-      .then((g) => active && setRsuGrants(g))
-      .catch(() => active && setRsuGrants([]))
-    return () => {
-      active = false
-    }
+    listRsuGrants(user.id).then(setRsuGrants).catch(() => setRsuGrants([]))
   }, [user])
+
+  useEffect(() => {
+    reloadGrants()
+  }, [reloadGrants])
+
+  async function handleDeleteTx(t: Transaction) {
+    if (!confirm('Supprimer cette transaction ?')) return
+    try {
+      await deleteTransaction(t.id)
+      await reload()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Suppression impossible.')
+    }
+  }
+
+  async function handleDeleteGrant(g: RsuGrant) {
+    if (!confirm('Supprimer ce grant RSU ?')) return
+    try {
+      await deleteRsuGrant(g.id)
+      reloadGrants()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Suppression impossible.')
+    }
+  }
 
   // Historique des dividendes du titre (données de marché, mises en cache).
   useEffect(() => {
@@ -133,7 +155,7 @@ export default function AssetDetailPage() {
             ) : (
               <div className="alert alert-info">
                 Symbole TradingView non configuré pour cet actif.{' '}
-                <Link to="/assets">Ajoutez-le</Link> (champ « Symbole TradingView », ex : <code>NASDAQ:AAPL</code>).
+                <Link to="/settings">Ajoutez-le</Link> (Paramètres → Actifs, champ « Symbole TradingView », ex : <code>NASDAQ:AAPL</code>).
               </div>
             )}
             <div className="stat-grid" style={{ marginTop: 16 }}>
@@ -155,6 +177,7 @@ export default function AssetDetailPage() {
                       <th>Vesting</th>
                       <th className="num">Acquises</th>
                       <th>Prochaine livraison</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -171,6 +194,10 @@ export default function AssetDetailPage() {
                             {nextEvent
                               ? `${formatDate(nextEvent.date)} (+${nextEvent.shares.toLocaleString('fr-FR')})`
                               : <span className="chip chip-positive">Terminé</span>}
+                          </td>
+                          <td className="row-actions">
+                            <button className="btn btn-sm btn-ghost" onClick={() => setEditGrant(g)}>Modifier</button>
+                            <button className="btn btn-sm btn-danger-ghost" onClick={() => handleDeleteGrant(g)}>Suppr.</button>
                           </td>
                         </tr>
                       )
@@ -270,7 +297,7 @@ export default function AssetDetailPage() {
                 <thead>
                   <tr>
                     <th>Date</th><th>Type</th><th>Compte</th>
-                    <th className="num">Qté</th><th className="num">Prix</th><th className="num">Frais</th><th className="num">Montant</th>
+                    <th className="num">Qté</th><th className="num">Prix</th><th className="num">Frais</th><th className="num">Montant</th><th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -283,6 +310,10 @@ export default function AssetDetailPage() {
                       <td className="num">{t.price != null ? formatMoney(t.price, t.currency) : '—'}</td>
                       <td className="num">{t.fees != null ? formatMoney(t.fees, t.currency) : '—'}</td>
                       <td className="num">{t.amount != null ? formatMoney(t.amount, t.currency) : '—'}</td>
+                      <td className="row-actions">
+                        <button className="btn btn-sm btn-ghost" onClick={() => setEditTx(t)}>Modifier</button>
+                        <button className="btn btn-sm btn-danger-ghost" onClick={() => handleDeleteTx(t)}>Suppr.</button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -292,6 +323,26 @@ export default function AssetDetailPage() {
         </Card>
       )}
 
+      {editTx && user && (
+        <AddOperationModal
+          accounts={accounts}
+          assets={assets}
+          userId={user.id}
+          editTransaction={editTx}
+          onClose={() => setEditTx(null)}
+          onSaved={reload}
+        />
+      )}
+      {editGrant && user && (
+        <AddOperationModal
+          accounts={accounts}
+          assets={assets}
+          userId={user.id}
+          editGrant={editGrant}
+          onClose={() => setEditGrant(null)}
+          onSaved={reloadGrants}
+        />
+      )}
     </div>
   )
 }

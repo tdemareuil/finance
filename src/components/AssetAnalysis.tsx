@@ -7,7 +7,7 @@ import type {
   CompanyFundamentals,
   CompanyNewsItem,
   PriceTarget,
-} from '../../types'
+} from '../types'
 import {
   getConsensus,
   getFundamentals,
@@ -16,10 +16,10 @@ import {
   getRecommendationTrends,
   isFinnhubConfigured,
   isFmpConfigured,
-} from '../../services/analysisService'
-import { providerLabel, type ProviderName } from '../../services/providers/types'
-import { Card, Loading } from '../common/ui'
-import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../../utils/format'
+} from '../services/analysisService'
+import { providerLabel, type ProviderName } from '../services/providers/types'
+import { Card, Loading } from './ui'
+import { formatDate, formatMoney, formatNumber, formatPct, signClass } from '../utils'
 
 const RATING_LABEL: Record<AnalystRating, string> = {
   STRONG_BUY: 'Achat fort',

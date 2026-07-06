@@ -21,7 +21,7 @@ pnpm-debug.log*
 .DS_Store
 .vscode/*
 !.vscode/extensions.json
-.claude/settings.local.json
+.claude/
 .idea/
 *.suo
 *.ntvs*

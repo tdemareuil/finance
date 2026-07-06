@@ -1,23 +1,22 @@
 import { useState, type FormEvent } from 'react'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
-import { Card, EmptyState, Loading, Modal } from '../components/common/ui'
+import { Card, EmptyState, Modal } from './ui'
 import { createAccount, deleteAccount, updateAccount } from '../services/accountService'
 import type { Account, AccountType, Currency } from '../types'
-import { formatMoney } from '../utils/format'
+import { formatMoney } from '../utils'
 import { computeCash, computeLivretInterest } from '../services/portfolioCalculator'
 
 const TYPE_LABEL: Record<AccountType, string> = { CTO: 'CTO', PEA: 'PEA', LIVRET_PLUS: 'Livret+' }
 
-export default function AccountsPage() {
+// Gestion des comptes (CRUD) — section intégrée à la page Paramètres.
+export default function AccountsManager() {
   const { user } = useAuth()
-  const { accounts, transactions, loading, reload } = usePortfolio()
+  const { accounts, transactions, reload } = usePortfolio()
   const [editing, setEditing] = useState<Account | null>(null)
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (loading) return <Loading />
 
   function txCountFor(id: string) {
     return transactions.filter((t) => t.accountId === id).length
@@ -53,11 +52,8 @@ export default function AccountsPage() {
       interestRate: rate != null && Number.isFinite(rate) ? rate : undefined,
     }
     try {
-      if (editing) {
-        await updateAccount(editing.id, payload)
-      } else {
-        await createAccount({ userId: user.id, ...payload })
-      }
+      if (editing) await updateAccount(editing.id, payload)
+      else await createAccount({ userId: user.id, ...payload })
       await reload()
       setEditing(null)
       setCreating(false)
@@ -72,16 +68,14 @@ export default function AccountsPage() {
   const current = editing
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <h1 className="page-title">Comptes</h1>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>+ Nouveau compte</button>
-      </div>
-
-      <Card>
-        {accounts.length === 0 ? (
-          <EmptyState title="Aucun compte" hint="Créez un CTO, un PEA ou un Livret+ pour commencer." />
-        ) : (
+    <Card
+      title="Comptes"
+      action={<button className="btn btn-sm btn-primary" onClick={() => setCreating(true)}>+ Nouveau compte</button>}
+    >
+      {accounts.length === 0 ? (
+        <EmptyState title="Aucun compte" hint="Créez un CTO, un PEA ou un Livret+ pour commencer." />
+      ) : (
+        <div className="table-scroll">
           <table className="table">
             <thead>
               <tr>
@@ -127,18 +121,15 @@ export default function AccountsPage() {
               })}
             </tbody>
           </table>
-        )}
-      </Card>
+        </div>
+      )}
 
       {showModal && (
         <Modal
           title={current ? 'Modifier le compte' : 'Nouveau compte'}
-          onClose={() => {
-            setEditing(null)
-            setCreating(false)
-          }}
+          onClose={() => { setEditing(null); setCreating(false) }}
         >
-          <form onSubmit={handleSubmit} className="form-grid" id="account-form">
+          <form onSubmit={handleSubmit} className="form-grid">
             <label className="field">
               <span>Nom</span>
               <input name="name" defaultValue={current?.name ?? ''} required placeholder="Ex : PEA Fortuneo" />
@@ -181,6 +172,6 @@ export default function AccountsPage() {
           </form>
         </Modal>
       )}
-    </div>
+    </Card>
   )
 }

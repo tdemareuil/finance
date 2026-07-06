@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { isUnreachableError } from '../utils/errors'
+import { isUnreachableError } from '../utils'
 
 // Email pré-rempli en dur (mono-utilisateur) : seul le mot de passe est demandé.
 const PRESET_EMAIL = (import.meta.env.VITE_LOGIN_EMAIL as string | undefined)?.trim() || ''

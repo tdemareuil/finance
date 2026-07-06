@@ -2,22 +2,21 @@ import { useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
-import { Card, EmptyState, Loading, Modal } from '../components/common/ui'
+import { Card, EmptyState, Modal } from './ui'
 import { createAsset, deleteAsset, updateAsset } from '../services/assetService'
 import type { Asset, AssetType, Currency } from '../types'
-import { formatMoney } from '../utils/format'
+import { formatMoney } from '../utils'
 
 const TYPE_LABEL: Record<AssetType, string> = { STOCK: 'Action', ETF: 'ETF', CASH: 'Cash' }
 
-export default function AssetsPage() {
+// Gestion des actifs (CRUD + symboles TradingView/Finnhub/EODHD) — section Paramètres.
+export default function AssetsManager() {
   const { user } = useAuth()
-  const { assets, transactions, priceByAssetId, loading, reload } = usePortfolio()
+  const { assets, transactions, priceByAssetId, reload } = usePortfolio()
   const [editing, setEditing] = useState<Asset | null>(null)
   const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  if (loading) return <Loading />
 
   function txCountFor(id: string) {
     return transactions.filter((t) => t.assetId === id).length
@@ -74,52 +73,48 @@ export default function AssetsPage() {
   const c = editing
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <h1 className="page-title">Actifs</h1>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>+ Nouvel actif</button>
-      </div>
-
-      <Card>
-        {assets.length === 0 ? (
-          <EmptyState title="Aucun actif" hint="Ajoutez une action, un ETF ou une ligne de cash." />
-        ) : (
-          <div className="table-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Nom</th>
-                  <th>Ticker</th>
-                  <th>Type</th>
-                  <th>ISIN</th>
-                  <th>Devise</th>
-                  <th className="num">Cours</th>
-                  <th></th>
+    <Card
+      title="Actifs"
+      action={<button className="btn btn-sm btn-primary" onClick={() => setCreating(true)}>+ Nouvel actif</button>}
+    >
+      {assets.length === 0 ? (
+        <EmptyState title="Aucun actif" hint="Ajoutez une action, un ETF ou une ligne de cash." />
+      ) : (
+        <div className="table-scroll">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Ticker</th>
+                <th>Type</th>
+                <th>ISIN</th>
+                <th>Devise</th>
+                <th className="num">Cours</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {assets.map((a) => (
+                <tr key={a.id}>
+                  <td><Link to={`/assets/${a.id}`}>{a.name}</Link></td>
+                  <td>{a.ticker}{a.exchange ? `.${a.exchange}` : ''}</td>
+                  <td><span className="chip chip-default">{TYPE_LABEL[a.type]}</span></td>
+                  <td className="muted small">{a.isin ?? '—'}</td>
+                  <td>{a.currency}</td>
+                  <td className="num">{priceByAssetId[a.id] != null ? formatMoney(priceByAssetId[a.id]!, a.currency) : '—'}</td>
+                  <td className="row-actions">
+                    <button className="btn btn-sm btn-ghost" onClick={() => setEditing(a)}>Modifier</button>
+                    <button className="btn btn-sm btn-danger-ghost" onClick={() => handleDelete(a)}>Supprimer</button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {assets.map((a) => (
-                  <tr key={a.id}>
-                    <td><Link to={`/assets/${a.id}`}>{a.name}</Link></td>
-                    <td>{a.ticker}{a.exchange ? `.${a.exchange}` : ''}</td>
-                    <td><span className="chip chip-default">{TYPE_LABEL[a.type]}</span></td>
-                    <td className="muted small">{a.isin ?? '—'}</td>
-                    <td>{a.currency}</td>
-                    <td className="num">{priceByAssetId[a.id] != null ? formatMoney(priceByAssetId[a.id]!, a.currency) : '—'}</td>
-                    <td className="row-actions">
-                      <button className="btn btn-sm btn-ghost" onClick={() => setEditing(a)}>Modifier</button>
-                      <button className="btn btn-sm btn-danger-ghost" onClick={() => handleDelete(a)}>Supprimer</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {showModal && (
-        <Modal title={c ? 'Modifier l\'actif' : 'Nouvel actif'} onClose={() => { setEditing(null); setCreating(false) }} wide>
+        <Modal title={c ? "Modifier l'actif" : 'Nouvel actif'} onClose={() => { setEditing(null); setCreating(false) }} wide>
           <form onSubmit={handleSubmit} className="form-grid form-grid-2">
             <label className="field"><span>Nom</span><input name="name" defaultValue={c?.name ?? ''} required placeholder="Ex : Apple Inc." /></label>
             <label className="field"><span>Ticker</span><input name="ticker" defaultValue={c?.ticker ?? ''} required placeholder="AAPL" /></label>
@@ -153,6 +148,6 @@ export default function AssetsPage() {
           </form>
         </Modal>
       )}
-    </div>
+    </Card>
   )
 }

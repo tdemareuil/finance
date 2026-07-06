@@ -2,19 +2,19 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
-import { Card, EmptyState, Loading, StatCard } from '../components/common/ui'
-import ValueChart from '../components/charts/ValueChart'
-import AllocationPie from '../components/charts/AllocationPie'
-import HoldingsGrouped from '../components/dashboard/HoldingsGrouped'
-import AddOperationModal from '../components/dashboard/AddOperationModal'
+import { Card, EmptyState, Loading, StatCard } from '../components/ui'
+import { ValueChart } from '../components/charts'
+import { AllocationPie } from '../components/charts'
+import HoldingsGrouped from '../components/HoldingsGrouped'
+import AddOperationModal from '../components/AddOperationModal'
 import {
   allocationByAccount,
   allocationByCountry,
   allocationByCurrency,
   allocationBySector,
   allocationByType,
-} from '../utils/aggregations'
-import { formatMoney, formatPct, signClass } from '../utils/format'
+} from '../utils'
+import { formatMoney, formatPct, signClass } from '../utils'
 
 export default function PortfolioPage() {
   const { user } = useAuth()

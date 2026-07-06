@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { getTheme } from '../../utils/theme'
+import { getTheme } from '../utils'
 
 // ---------------------------------------------------------------------------
 // Widget "Advanced Chart" de TradingView.

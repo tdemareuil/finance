@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
-import { Card } from '../components/common/ui'
+import { Card } from '../components/ui'
+import AccountsManager from '../components/AccountsManager'
+import AssetsManager from '../components/AssetsManager'
 import { isEodhdConfigured, isFmpConfigured, marketDataMode } from '../services/marketDataService'
 import { isFinnhubConfigured } from '../services/analysisService'
 import { clearDemoData, seedDemoData } from '../services/localStore'
@@ -42,6 +44,9 @@ export default function SettingsPage() {
   return (
     <div className="page">
       <h1 className="page-title">Paramètres</h1>
+
+      <AccountsManager />
+      <AssetsManager />
 
       <Card title="Compte">
         <ul className="kv-list">

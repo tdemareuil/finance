@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
-import { Card } from '../components/common/ui'
-import { isUnreachableError } from '../utils/errors'
+import { Card } from '../components/ui'
+import { isUnreachableError } from '../utils'
 import {
   buildImportPreview,
   executeImport,

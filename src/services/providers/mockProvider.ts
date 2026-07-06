@@ -5,13 +5,13 @@ import {
   getMockDividendEvents,
   getMockHistoricalPrices,
   getMockLatestPrice,
-} from '../../data/mockMarketData'
+} from '../../data'
 import {
   getMockCompanyFundamentals,
   getMockCompanyNews,
   getMockPriceTarget,
   getMockRecommendationTrends,
-} from '../../data/mockAnalysisData'
+} from '../../data'
 
 // ---------------------------------------------------------------------------
 // MockProvider — dernier recours (toujours activé). Données déterministes.

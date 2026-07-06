@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { Position } from '../../types'
-import { assetRisk, RISK_ORDER, type RiskLevel } from '../../utils/risk'
-import { formatMoney, formatPct, signClass } from '../../utils/format'
+import type { Position } from '../types'
+import { assetRisk, RISK_ORDER, type RiskLevel } from '../utils'
+import { formatMoney, formatPct, signClass } from '../utils'
 
 // ---------------------------------------------------------------------------
 // Liste de tous les titres détenus, groupés par compte / type / risque.

@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { usePortfolio } from '../../context/PortfolioContext'
-import { Modal } from '../common/ui'
-import TradingViewWidget from '../assets/TradingViewWidget'
-import AssetAnalysis from '../assets/AssetAnalysis'
-import { getLatestPrice } from '../../services/marketDataService'
-import type { Asset, AssetType, Currency } from '../../types'
+import { usePortfolio } from '../context/PortfolioContext'
+import { Modal } from './ui'
+import TradingViewWidget from './TradingViewWidget'
+import AssetAnalysis from './AssetAnalysis'
+import { getLatestPrice } from '../services/marketDataService'
+import type { Asset, AssetType, Currency } from '../types'
 import {
   searchInstruments,
   toTradingViewSymbol,
   type InstrumentSearchResult,
-} from '../../services/instrumentSearchService'
+} from '../services/instrumentSearchService'
 
 // Places de cotation en zone euro → devise EUR (le reste : USD par défaut,
 // Currency ne gère que EUR/USD). Best-effort pour le formatage des montants.

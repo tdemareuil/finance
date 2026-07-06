@@ -4,7 +4,7 @@ import { HashRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
 import { PortfolioProvider } from './context/PortfolioContext'
-import { initTheme } from './utils/theme'
+import { initTheme } from './utils'
 import './index.css'
 
 initTheme()

@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import { usePortfolio } from '../../context/PortfolioContext'
-import { getTheme, setTheme, type Theme } from '../../utils/theme'
-import GlobalSearch from '../search/GlobalSearch'
+import { useAuth } from '../context/AuthContext'
+import { usePortfolio } from '../context/PortfolioContext'
+import { getTheme, setTheme, type Theme } from '../utils'
+import GlobalSearch from './GlobalSearch'
 
 const NAV = [
   { to: '/portfolio', label: 'Portefeuille', icon: '📊' },

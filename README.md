@@ -21,9 +21,11 @@ accessible depuis plusieurs appareils).
 ## Fonctionnalités
 
 - Authentification email/mot de passe (Supabase), sessions persistantes, routes protégées
-- CRUD complet : comptes, actifs, transactions
-- Import CSV générique : mapping des colonnes, aperçu, détection d'erreurs et de doublons,
-  création automatique des comptes/actifs manquants, `ImportBatch`
+- **Gestion des comptes et actifs** (CRUD, taux Livret+, symboles TradingView/Finnhub/EODHD)
+  regroupée dans **Paramètres** ; les **transactions** et **grants RSU** se créent via le bouton
+  « + Ajouter une opération » et s'éditent/suppriment depuis la fiche du titre concerné
+- Import CSV (ouvert via un bouton depuis le Portefeuille) : aperçu, détection d'erreurs et de
+  doublons, création automatique des comptes/actifs manquants, `ImportBatch`
 - Import **Fortuneo** : instantané `.xls` (positions → achat au **PRU réel**) **ou** historique
   `.csv` des opérations (achats/ventes/coupons/taxes, encodage Windows-1252 géré)
 - Import **Trade Republic** (CSV de transactions) : reconnu automatiquement, historique réel
@@ -69,46 +71,56 @@ npm install
    *Settings → API Keys*. N'utilisez pas la legacy anon key, ni la `service_role` /
    `sb_secret` / JWT secret (jamais côté client).
 3. Ouvrez *SQL Editor → New query*, collez le contenu de
-   [`supabase/schema.sql`](supabase/schema.sql) et exécutez-le.
-   Cela crée les tables, les index, active **Row Level Security** et crée les
-   policies (chaque utilisateur ne voit/écrit que ses propres lignes).
-   - Si vous aviez déjà appliqué le schéma **avant** l'ajout de la section Analyse,
-     exécutez aussi [`supabase/migration_finnhub_symbol.sql`](supabase/migration_finnhub_symbol.sql)
-     (`alter table assets add column if not exists finnhub_symbol text;`).
-   - Pour l'auto-calcul des intérêts Livret+, exécutez également
-     [`supabase/migration_account_interest_rate.sql`](supabase/migration_account_interest_rate.sql)
-     (`alter table accounts add column if not exists interest_rate numeric;`).
-   - Pour la déduplication des imports, exécutez
-     [`supabase/migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql)
-     (colonne `external_id` + index unique `(user_id, external_id)`).
-   - Pour les **grants RSU**, exécutez
-     [`supabase/migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql)
-     (table `rsu_grants` + index + RLS + policies).
-4. Dans *Authentication → Providers*, laissez **Email** activé.
-   Pour tester rapidement, vous pouvez désactiver la confirmation email
-   (*Authentication → Sign In / Providers → Confirm email*).
+   [`supabase/schema.sql`](supabase/schema.sql) et exécutez-le. **Pour une nouvelle base, c'est
+   tout** : ce fichier crée toutes les tables (`accounts`, `assets`, `transactions`,
+   `dividend_events`, `import_batches`, `rsu_grants`), les index, active **Row Level Security**
+   et crée les policies (chaque utilisateur ne voit/écrit que ses propres lignes).
+   - Les fichiers `supabase/migration_*.sql` ne servent qu'à mettre à jour une base **déjà créée
+     avec une ancienne version du schéma** (pas besoin sur une base neuve) :
+     [`migration_finnhub_symbol.sql`](supabase/migration_finnhub_symbol.sql) (colonne `finnhub_symbol`),
+     [`migration_account_interest_rate.sql`](supabase/migration_account_interest_rate.sql) (colonne `interest_rate`),
+     [`migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql) (dédup `external_id` + index unique),
+     [`migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql) (table `rsu_grants` + RLS).
+4. Créez votre utilisateur dans *Authentication → Users → Add user* (il n'y a pas d'inscription
+   en libre-service dans l'app). Laissez le provider **Email** activé ; pour tester rapidement,
+   vous pouvez désactiver la confirmation email (*Authentication → Sign In / Providers → Confirm email*).
 
 ## 3. Variables d'environnement
 
-Copiez `.env.example` en `.env.local` et remplissez les valeurs :
+Créez un fichier **`.env.local`** à la racine (ignoré par git) à partir du modèle ci-dessous,
+puis remplissez au minimum les deux variables Supabase :
 
-```bash
-cp .env.example .env.local
+```env
+# --- Supabase (obligatoire pour l'auth et la persistance) ---
+# Clé "Publishable" (sb_publishable_…), JAMAIS la service_role / sb_secret / JWT secret.
+VITE_SUPABASE_URL=https://votre-projet.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxx
+
+# --- Données de marché / analyse (optionnel : vide = données mock déterministes) ---
+VITE_EODHD_API_KEY=          # cours, historiques, dividendes (eodhd.com)
+VITE_FINNHUB_API_KEY=        # analyse : consensus, objectifs, news, fondamentaux (finnhub.io)
+VITE_FMP_API_KEY=            # fallback marché + analyse (site.financialmodelingprep.com)
+
+# --- Divers (optionnel) ---
+VITE_DEFAULT_BENCHMARK=CW8.PA   # benchmark MSCI World (symbole EODHD)
+VITE_LOGIN_EMAIL=               # si renseigné, le login ne demande que le mot de passe
+# VITE_BASE=/                   # base URL du build (défaut : /<nom-du-repo>/ ; voir vite.config.ts)
 ```
 
 | Variable | Obligatoire | Description |
 |---|---|---|
-| `VITE_SUPABASE_URL` | pour la persistance | URL du projet Supabase |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | pour la persistance | Clé **Publishable** (`sb_publishable_…`) |
+| `VITE_SUPABASE_URL` | oui (persistance) | URL du projet Supabase |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | oui (persistance) | Clé **Publishable** (`sb_publishable_…`) |
 | `VITE_EODHD_API_KEY` | non | Clé EODHD (cours) ; **vide = mode mock** |
 | `VITE_FINNHUB_API_KEY` | non | Clé Finnhub (analyse) ; **vide = mode mock** |
-| `VITE_FMP_API_KEY` | non | Clé Financial Modeling Prep (**fallback** marché + analyse) ; vide = FMP désactivé |
+| `VITE_FMP_API_KEY` | non | Clé Financial Modeling Prep (**fallback** marché + analyse) ; vide = désactivé |
 | `VITE_DEFAULT_BENCHMARK` | non | Symbole benchmark (défaut `CW8.PA`) |
-| `VITE_BASE` | non | Base URL du build (défaut `/patrimoine-dashboard/`) |
+| `VITE_LOGIN_EMAIL` | non | Email pré-rempli (login mono-utilisateur : seul le mot de passe est demandé) |
+| `VITE_BASE` | non | Base URL du build (défaut `/<nom-du-repo>/`) |
 
 > 🔒 `.env.local` est ignoré par git. **Aucune clé ne doit être committée.**
-> Sans Supabase configuré, seul le mode démo est disponible.
-> Sans clé EODHD, les données de marché sont générées localement (mock déterministe).
+> Sans Supabase configuré, seul le mode démo local est disponible.
+> Sans clé de marché/analyse, les données correspondantes sont générées localement (mock déterministe).
 
 ## 4. Lancement local
 
@@ -179,7 +191,8 @@ date,account,type,assetName,ticker,isin,quantity,price,fees,amount,currency,note
 2024-03-10,CTO Trade Republic,dividende,Apple Inc.,AAPL,,,,,2.5,USD,Dividende
 ```
 
-Un fichier d'exemple est téléchargeable directement depuis la page **Import CSV**.
+> L'import s'ouvre via le bouton **📥 Importer un CSV** sur la page Portefeuille. Les formats
+> **Fortuneo** et **Trade Republic** sont reconnus automatiquement (mapping des colonnes non requis).
 
 ### Import Fortuneo (.xls)
 
@@ -241,7 +254,7 @@ gère que cours / historiques / dividendes / splits).
    ```
    La clé n'est **jamais** committée (`.env.local` est gitignoré). Sans clé, la section
    Analyse fonctionne avec des **données mock** (un bandeau l'indique).
-4. Renseignez le **symbole Finnhub** de chaque actif (page Actifs → champ « Symbole Finnhub »).
+4. Renseignez le **symbole Finnhub** de chaque actif (Paramètres → Actifs → champ « Symbole Finnhub »).
    À défaut, le service utilise le `ticker`.
 
 **Exemples de symboles Finnhub :**
@@ -259,8 +272,8 @@ gère que cours / historiques / dividendes / splits).
 
 **Limites du plan gratuit Finnhub :**
 
-- ~60 requêtes/minute. L'app met en cache les réponses **12 h** (LocalStorage) et ne charge
-  l'onglet Analyse qu'à la demande, pour limiter les appels.
+- ~60 requêtes/minute. L'app met en cache les réponses **24 h** (LocalStorage) et ne charge
+  l'onglet Analyse qu'à son ouverture, pour limiter les appels.
 - L'endpoint **objectifs de cours** (`price-target`) est souvent réservé au plan payant :
   il peut renvoyer vide, ce qui n'est pas traité comme une erreur.
 - Les données analystes peuvent être **absentes** pour certains titres, notamment les **ETF**
@@ -301,7 +314,8 @@ capacité qu'il ne supporte pas.
   (une seule requête réseau).
 - **Rouvrir un actif ne relance aucun appel** tant que le cache est frais (clé de cache
   déterministe `provider:capability:symbole:params`).
-- L'onglet **Analyse** et l'**historique** ne sont chargés qu'à l'ouverture de l'onglet concerné.
+- L'onglet **Analyse** n'est chargé qu'à son ouverture ; les dividendes d'un titre au premier
+  affichage de sa fiche (puis servis par le cache).
 
 **TTL par type de donnée :**
 
@@ -379,9 +393,12 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
 - **Cache** : résultats valides, **vides et erreurs** mis en cache (mémoire + LocalStorage), TTL par
   type. Les résultats mock sont aussi cachés (inoffensif car déterministes).
 - **Navigation consolidée** : Dashboard et Portefeuille fusionnés en une page **Portefeuille**
-  (route par défaut ; `/dashboard` redirige). Les menus Transactions / Comptes / Actifs / RSU sont
-  retirés (routes conservées). *Alternative :* réintroduire des entrées de menu si l'app grossit.
-- **Niveau de risque** : classification **heuristique** sans champ dédié (`utils/risk.ts`) —
+  (route par défaut ; `/dashboard` redirige). Les pages autonomes Transactions / Comptes / Actifs /
+  RSU ont été **supprimées** : la gestion des comptes/actifs vit dans **Paramètres** (composants
+  `AccountsManager` / `AssetsManager`), et l'édition/suppression des transactions et RSU sur la
+  **fiche du titre**. Un seul modèle : créer via le bouton d'ajout, consulter/éditer là où la
+  donnée s'affiche.
+- **Niveau de risque** : classification **heuristique** sans champ dédié (`assetRisk` dans `utils.ts`) —
   Liquidités = Faible, ETF = Modéré, Action = Élevé. *Alternative :* champ `risk` éditable en base.
 - **RSU sur la fiche du titre** : plus d'onglet RSU global ; les grants (saisis via « + Ajouter une
   opération ») s'affichent sur la fiche de l'action concernée (onglet Performance).
@@ -429,29 +446,33 @@ Réimporter le même fichier, ou des fichiers qui se chevauchent, **ne crée jam
 
 ## Structure du projet
 
-La barre latérale n'expose que **Portefeuille · Dividendes · Import CSV · Paramètres**.
-Les pages Comptes / Actifs / Transactions / RSU existent toujours (routes accessibles par URL,
-CRUD conservé) mais ne sont plus des entrées de menu ; leurs actions courantes passent par la page
-Portefeuille (bouton « + Ajouter une opération ») et la fiche d'un titre.
+Arborescence volontairement plate (**5 dossiers**). La barre latérale n'expose que
+**Portefeuille · Dividendes · Paramètres** (l'import CSV s'ouvre via un bouton du Portefeuille).
 
 ```
 src/
-  components/   auth, layout, charts, assets, dashboard (HoldingsGrouped,
-                AddOperationModal), search (GlobalSearch), common (UI)
-  context/      AuthContext, PortfolioContext
-  pages/        Login, Portfolio (page par défaut), AssetDetail, Dividends,
-                CsvImport, Settings ; Accounts, Assets, Transactions, Rsu
-                (routes seules, hors menu)
-  services/     supabaseClient, dataMode, localStore, rowMappers,
-                accountService, assetService, transactionService, rsuService,
-                dividendService, importBatchService, csvImportService,
-                instrumentSearchService, symbolLookupService,
-                marketDataService, analysisService, apiCacheService, consensus,
-                portfolioCalculator, rsuCalculator, benchmarkService
-    providers/  types, eodhdProvider, finnhubProvider, fmpProvider, mockProvider
-  data/         mockMarketData, mockAnalysisData, demoData
-  utils/        format, aggregations, risk, theme
-  types/        index.ts
-supabase/       schema.sql (tables + RLS + policies) + migrations (finnhub_symbol,
-                account_interest_rate, transaction_external_id, rsu_grants)
+  types.ts        modèle de données (miroir du schéma Supabase)
+  utils.ts        formatage, thème, risque, erreurs, agrégations (graphiques)
+  data.ts         données démo + mocks (marché & analyse), déterministes
+  main.tsx, App.tsx, index.css, vite-env.d.ts
+  components/      (fichiers plats, sans sous-dossiers)
+                   ui, charts, Layout, ProtectedRoute, GlobalSearch,
+                   HoldingsGrouped, AddOperationModal, AssetAnalysis,
+                   TradingViewWidget, AccountsManager, AssetsManager
+  context/         AuthContext, PortfolioContext
+  pages/           Login, Portfolio (défaut), AssetDetail, Dividends,
+                   CsvImport, Settings
+  services/        supabaseClient, dataMode, localStore, rowMappers,
+                   accountService, assetService, transactionService, rsuService,
+                   dividendService, importBatchService, csvImportService,
+                   instrumentSearchService, symbolLookupService,
+                   marketDataService, analysisService, apiCacheService, consensus,
+                   portfolioCalculator, rsuCalculator, benchmarkService
+    providers/     types, eodhdProvider, finnhubProvider, fmpProvider, mockProvider
+supabase/          schema.sql (tables + RLS + policies) + migrations (finnhub_symbol,
+                   account_interest_rate, transaction_external_id, rsu_grants)
 ```
+
+À la racine : `index.html`, `vite.config.ts`, un unique `tsconfig.json`, `package.json`,
+`.github/workflows/deploy.yml` (déploiement Pages). Pas de dossier `public/` (le workflow
+officiel ne lance pas Jekyll). La config du preview local (`.claude/`) n'est pas suivie par git.
