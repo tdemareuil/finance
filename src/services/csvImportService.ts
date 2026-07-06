@@ -12,6 +12,7 @@ import { createAccount } from './accountService'
 import { createAsset } from './assetService'
 import { createTransactionsBulk } from './transactionService'
 import { createImportBatch, updateImportBatch } from './importBatchService'
+import { resolveSymbol } from './symbolLookupService'
 
 // ---------------------------------------------------------------------------
 // Import CSV générique avec mapping manuel des colonnes.
@@ -310,7 +311,7 @@ export function parseTradeRepublicCsv(parsed: ParsedCsv, accountName: string): B
     note:
       `Export Trade Republic détecté — ${rows.length} opération(s). ` +
       `Historique réel : dépôts/retraits, achats/ventes, dividendes, intérêts, frais. ` +
-      `L'ISIN sert à rapprocher/créer les actifs (le ticker peut être à compléter ensuite).`,
+      `L'ISIN rapproche les actifs et résout automatiquement le vrai ticker (Finnhub/FMP).`,
     parsed: { headers: [...GENERIC_COLUMNS], rows },
     mapping,
     detectedAccountName: accountName,
@@ -405,7 +406,7 @@ export function parseFortuneoHistoryCsv(parsed: ParsedCsv, accountName: string):
     note:
       `Export Fortuneo (historique des opérations) — ${rows.length} opération(s). ` +
       `Historique réel : achats/ventes (frais inclus), coupons, taxes. ` +
-      `Sans ISIN dans ce format, les actifs sont rapprochés par nom. ` +
+      `Sans ISIN dans ce format, les actifs sont rapprochés par nom (ticker résolu par nom si possible). ` +
       `⚠️ N'importez pas aussi l'instantané .xls dans le même compte (double comptage).`,
     parsed: { headers: [...GENERIC_COLUMNS], rows },
     mapping,
@@ -747,11 +748,31 @@ export async function executeImport(
           (a.ticker && assetByTicker.get(a.ticker.toLowerCase())) ||
           assetByName.get(a.name.toLowerCase())
         if (existing) continue
+
+        // Ticker : on n'en invente pas. Si absent, on tente de résoudre le VRAI
+        // symbole via les sources de données (Finnhub/FMP), par ISIN puis par nom.
+        let ticker = a.ticker
+        let exchange: string | undefined
+        let finnhubSymbol: string | undefined
+        let tradingViewSymbol: string | undefined
+        if (!ticker) {
+          const resolved = await resolveSymbol(a.isin, a.name).catch(() => null)
+          if (resolved) {
+            ticker = resolved.ticker
+            exchange = resolved.exchange
+            finnhubSymbol = resolved.finnhubSymbol
+            tradingViewSymbol = resolved.tradingViewSymbol
+          }
+        }
+
         const created = await createAsset({
           userId,
           name: a.name,
-          ticker: a.ticker ?? a.name.slice(0, 8).toUpperCase(),
+          ticker: ticker ?? '', // pas de ticker inventé : vide si non résolu
           isin: a.isin,
+          exchange,
+          finnhubSymbol,
+          tradingViewSymbol,
           currency: a.currency,
           type: 'STOCK',
         })

@@ -190,8 +190,9 @@ Fortuneo, c'est un **historique d'opérations** → il reconstitue fidèlement l
 - `TRANSFER_*_INBOUND` / `REFERRAL` / `INTEREST` → dépôts ; `*_OUTBOUND` → retraits ;
 - `BUY` / `SELL` (colonne `shares`/`price`, `fee`) → achats/ventes ;
 - `DIVIDEND` → dividendes.
-- La colonne `symbol` contient l'**ISIN** (utilisé pour rapprocher/créer les actifs) ; le
-  ticker n'est pas fourni par TR et peut être complété ensuite (utile pour Finnhub/TradingView).
+- La colonne `symbol` contient l'**ISIN**. Le vrai **ticker** et le symbole Finnhub sont
+  **résolus automatiquement** depuis l'ISIN via Finnhub (repli FMP) — aucun ticker inventé ;
+  s'il est introuvable, le ticker reste vide.
 
 Vous choisissez le **compte cible** (par défaut « CTO Trade Republic »).
 
@@ -347,6 +348,11 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
 - **Import Fortuneo = instantané de positions** → un `BUY` par ligne au PRU, daté du jour de
   l'export. Pas d'historique réel (dividendes / frais / ventes / dates d'achat). *Alternative :*
   parser l'export « opérations » daté de Fortuneo.
+- **Résolution du ticker à l'import** : on n'invente jamais de ticker. À la création d'un actif,
+  le vrai symbole est résolu depuis l'**ISIN** (puis le nom) via Finnhub `/search` → repli FMP
+  (`symbolLookupService`, cache 30 j). Non trouvé ⇒ ticker vide. Le `finnhubSymbol` est aussi
+  renseigné (l'onglet Analyse marche directement) ; le `tradingViewSymbol` est déduit pour les
+  tickers US sans suffixe.
 - **Objectifs de cours** : Finnhub gratuit ne les fournit pas (capability non déclarée) ; fallback
   FMP (souvent premium → `ERROR`) puis mock. En pratique souvent en mode démo. *Alternative :* plan payant.
 - **Consensus/analyse pour ETF** : souvent absent → message informatif (pas une erreur).
