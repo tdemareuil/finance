@@ -216,14 +216,26 @@ export default function HoldingsGrouped({
 
     const fromAccounts: Holding[] = accounts.map((a) => {
       const savings = isSavingsAccount(a.type)
-      const balance = savings ? savingsBalance(a, transactions) : computeCash(transactions.filter((t) => t.accountId === a.id))
+      // Espèces d'un compte-titres : plancher à 0 (un achat sans versement ne
+      // crée pas un solde négatif — cohérent avec le patrimoine total).
+      const balance = savings
+        ? savingsBalance(a, transactions)
+        : Math.max(0, computeCash(transactions.filter((t) => t.accountId === a.id)))
       const [typeKey, typeLabel] = savings
         ? savingsTypeGroup(a.type)
         : (['CASH', ASSET_TYPE_LABEL.CASH] as [string, string])
+      // Nom de la banque en caption : « <type> <banque> » → on retire le préfixe
+      // de type pour ne garder que la banque (ex. « Fortuneo »).
+      const accountTypeLabel = ACCOUNT_TYPE_LABEL[a.type]
+      const bank = a.name.startsWith(accountTypeLabel)
+        ? a.name.slice(accountTypeLabel.length).trim()
+        : a.name === accountTypeLabel
+          ? ''
+          : a.name
       return {
         key: `acct-${a.id}`,
-        name: savings ? a.name : 'Espèces',
-        subtitle: savings ? ACCOUNT_TYPE_LABEL[a.type] : a.name,
+        name: savings ? accountTypeLabel : 'Espèces',
+        subtitle: savings ? bank || accountTypeLabel : a.name,
         kind: (savings ? 'savings' : 'cash') as HoldingKind,
         accountId: a.id,
         accountName: a.name,
@@ -279,7 +291,7 @@ export default function HoldingsGrouped({
                 <tr>
                   <th>Actif</th>
                   {mode !== 'account' && <th>Compte</th>}
-                  <th className="num">Quantité</th>
+                  <th className="num">Qté</th>
                   <th className="num">PRU</th>
                   <th className="num">Valeur</th>
                   <th className="num">Perf.</th>

@@ -6,6 +6,7 @@ import { Card, EmptyState, Loading, StatCard } from '../components/ui'
 import { ValueChart } from '../components/charts'
 import { AllocationPie } from '../components/charts'
 import HoldingsGrouped from '../components/HoldingsGrouped'
+import ClosedPositions from '../components/ClosedPositions'
 import AddOperationModal from '../components/AddOperationModal'
 import {
   allocationByAccount,
@@ -188,6 +189,12 @@ export default function PortfolioPage() {
               onChanged={reload}
             />
           </Card>
+
+          {positions.some((p) => p.quantity <= 1e-9 && (p.realizedPnL !== 0 || p.dividendsReceived !== 0)) && (
+            <Card title="Positions clôturées">
+              <ClosedPositions positions={positions} />
+            </Card>
+          )}
 
           {open.length > 0 && (
             <Card title="Allocations">

@@ -38,6 +38,10 @@ const TYPE_LABEL: Record<TransactionType, string> = {
 const ASSET_TYPES: TransactionType[] = ['BUY', 'SELL', 'DIVIDEND']
 const TODAY = new Date().toISOString().slice(0, 10)
 const NEW_ACCOUNT = '__new__'
+// Banques proposées pour un nouveau livret / plan d'épargne. Le nom du compte
+// devient « <type> <banque> » (ex. « Livret A Fortuneo »), comme « CTO Trade
+// Republic » / « PEA Fortuneo » pour les comptes-titres.
+const BANKS = ['Fortuneo', 'Société Générale', 'Banque Populaire', 'Axa', 'Revolut']
 
 function num(fd: FormData, k: string): number | undefined {
   const v = fd.get(k)
@@ -127,9 +131,10 @@ export default function AddOperationModal({
     let accountId = String(fd.get('accountId') ?? '')
     if (accountId === NEW_ACCOUNT || accountId === '') {
       const rate = interestBearing ? num(fd, 'interestRatePct') : undefined
+      const bank = String(fd.get('bank') ?? '').trim()
       const created = await createAccount({
         userId,
-        name: String(fd.get('accountName') ?? '').trim() || savingsLabel,
+        name: bank ? `${savingsLabel} ${bank}` : savingsLabel,
         type: savingsType,
         currency: 'EUR',
         interestRate: rate != null ? rate / 100 : undefined,
@@ -277,8 +282,10 @@ export default function AddOperationModal({
           {savingsAccountId === NEW_ACCOUNT && (
             <>
               <label className="field">
-                <span>Nom du compte</span>
-                <input name="accountName" defaultValue={savingsLabel} placeholder={savingsLabel} />
+                <span>Banque</span>
+                <select name="bank" defaultValue={BANKS[0]}>
+                  {BANKS.map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
               </label>
               {interestBearing && (
                 <label className="field">

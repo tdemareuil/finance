@@ -40,7 +40,15 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
   évolution du patrimoine vs benchmark, liste **« Mes actifs »** (titres **et** livrets/plans
   d'épargne, dont le solde constitue l'actif) groupée au choix par **compte / type / niveau de
   risque** — les livrets se rangent sous le type **« Livrets »** et le risque **Faible** —, et
-  allocations (compte / type / devise / secteur / pays) regroupées dans une seule tuile
+  allocations (compte / type / devise / secteur / pays) regroupées dans une seule tuile.
+  Chaque ligne affiche **quantité, PRU, valeur, perf. (ou taux pour les livrets), poids et avis
+  d'analystes** (mini-barre de consensus) ; les en-têtes de groupe montrent leur **part du total**.
+  Les **espèces** de chaque compte-titres et les soldes d'épargne sont **éditables** (montant, et
+  taux pour les livrets). Le solde espèces est **borné à 0 par compte** : importer des achats sans
+  les versements correspondants (ex. historique Fortuneo) ne crée pas de solde négatif ni ne
+  fausse le patrimoine total
+- Carte **« Positions clôturées »** : titres entièrement vendus, avec leur **plus-value réalisée**
+  et leurs dividendes perçus, lien vers la fiche conservé
 - Depuis le Portefeuille : bouton **« 📥 Importer un CSV »** puis un menu **« + »** pour la saisie
   manuelle — **grant RSU** ou **versement/retrait** sur un livret ou plan d'épargne (Livret A, LDDS,
   Livret+, PER, PEE). Les achats/ventes de bourse passent uniquement par l'import CSV
@@ -203,7 +211,7 @@ date,account,type,assetName,ticker,isin,quantity,price,fees,amount,currency,note
 ### Import Fortuneo (.xls)
 
 Depuis Fortuneo, exportez votre **« portefeuille détaillé »** (fichier `.xls`), puis
-déposez-le sur la page **Import CSV** (format *Fortuneo* ou *Auto-détection*). L'app :
+déposez-le sur la page **Import CSV** (le format est reconnu automatiquement). L'app :
 
 - reconnaît l'en-tête `Libellé … ISIN`, détecte le type de compte (PEA/CTO) et la date d'export ;
 - ignore les lignes de sous-total `Solde position CPT` ;
@@ -219,7 +227,7 @@ déposez-le sur la page **Import CSV** (format *Fortuneo* ou *Auto-détection*).
 ### Import Trade Republic (CSV)
 
 Depuis Trade Republic, exportez l'historique de transactions (« Exportation de transactions »,
-fichier `.csv`) et déposez-le (format *Trade Republic* ou *Auto-détection*). Contrairement à
+fichier `.csv`) et déposez-le (le format est reconnu automatiquement). Contrairement à
 Fortuneo, c'est un **historique d'opérations** → il reconstitue fidèlement l'activité :
 
 - `TRANSFER_*_INBOUND` / `REFERRAL` / `INTEREST` → dépôts ; `*_OUTBOUND` → retraits ;

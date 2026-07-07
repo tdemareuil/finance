@@ -48,7 +48,9 @@ export default function CashLineModal({
   const hasRate = isInterestBearing(account.type)
   const accTx = transactions.filter((t) => t.accountId === account.id)
   const cash = computeCash(accTx)
-  const currentBalance = cash + interestAt(account, accTx, account.interestRate)
+  // Solde brut (signé) vs solde affiché (espèces d'un compte-titres plancher à 0).
+  const rawBalance = cash + interestAt(account, accTx, account.interestRate)
+  const currentBalance = hasRate ? rawBalance : Math.max(0, rawBalance)
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -64,9 +66,13 @@ export default function CashLineModal({
 
       const newRate = hasRate ? (() => { const p = num(fd.get('interestRatePct')); return p != null ? p / 100 : undefined })() : undefined
 
-      // Solde qui sera affiché avec le nouveau taux, hors ajustement du jour.
+      // Solde (brut, signé) qui sera affiché avec le nouveau taux, hors ajustement du jour.
       const projected = cash + interestAt(account, accTx, hasRate ? newRate : account.interestRate)
-      const delta = Math.round((target - projected) * 100) / 100
+      const projectedDisplayed = hasRate ? projected : Math.max(0, projected)
+      // Aucun ajustement si la cible = solde affiché actuel (évite un dépôt fantôme
+      // quand le solde brut est déjà négatif mais affiché à 0).
+      const delta =
+        Math.abs(target - projectedDisplayed) < 0.005 ? 0 : Math.round((target - projected) * 100) / 100
       if (Math.abs(delta) > 0.005) {
         await createTransaction({
           userId,

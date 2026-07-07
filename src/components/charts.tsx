@@ -41,6 +41,10 @@ const tooltipStyle = {
   fontSize: 13,
   color: 'var(--text)',
 }
+// Recharts colore le texte des items avec la couleur de la série (souvent noir
+// par défaut → illisible en thème sombre). On force la couleur du texte.
+const tooltipItemStyle = { color: 'var(--text)' }
+const tooltipLabelStyle = { color: 'var(--text-muted)' }
 
 // --- Évolution du patrimoine ----------------------------------------------
 interface ValueChartProps {
@@ -86,6 +90,8 @@ export function ValueChart({
             formatter={(v: number, name) => [formatMoney(v), labelFor(name as string)]}
             labelFormatter={(l) => formatMonth(l as string)}
             contentStyle={tooltipStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
           />
           <Legend formatter={(v) => labelFor(v)} />
           <Area
@@ -143,6 +149,8 @@ export function MonthlyBarChart({
             formatter={(v: number) => [formatMoney(v), label]}
             labelFormatter={(l) => formatMonth(`${l}-01`)}
             contentStyle={tooltipStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
           />
           <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
         </BarChart>
@@ -180,6 +188,8 @@ export function AllocationPie({ data }: { data: AllocationSlice[] }) {
           <Tooltip
             formatter={(v: number, n) => [`${formatMoney(v)} (${((v / total) * 100).toFixed(1)}%)`, n as string]}
             contentStyle={tooltipStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
           />
           <Legend />
         </PieChart>

@@ -171,6 +171,24 @@ export function computeCash(transactions: Transaction[], fx: FxTable = DEFAULT_F
   return cash
 }
 
+/**
+ * Cash total (EUR) borné à 0 **par compte** : un import d'achats sans les
+ * versements correspondants (ex. historique Fortuneo) ne doit pas rendre le
+ * solde espèces négatif ni fausser le patrimoine total. Chaque compte est
+ * calculé séparément puis planché à 0.
+ */
+export function computeClampedCash(transactions: Transaction[], fx: FxTable = DEFAULT_FX): number {
+  const byAccount = new Map<string, Transaction[]>()
+  for (const t of transactions) {
+    const arr = byAccount.get(t.accountId)
+    if (arr) arr.push(t)
+    else byAccount.set(t.accountId, [t])
+  }
+  let total = 0
+  for (const txs of byAccount.values()) total += Math.max(0, computeCash(txs, fx))
+  return total
+}
+
 // ---------------------------------------------------------------------------
 // Intérêts Livret+ — règle française des quinzaines.
 //  - Un versement porte intérêt à partir de la quinzaine SUIVANTE
@@ -313,7 +331,8 @@ export function computeSummary(
   )
   const livret = computeAllLivretInterest(accounts, transactions, fx)
   // Les intérêts crédités (années révolues) sont de l'argent réellement disponible → cash.
-  const cash = computeCash(transactions, fx) + livret.credited
+  // Cash borné à 0 par compte (un achat sans versement ne rend pas le solde négatif).
+  const cash = computeClampedCash(transactions, fx) + livret.credited
   const investedCapital = computeInvestedCapital(transactions, fx)
   const unrealizedPnL = positions.reduce(
     (s, p) => s + (p.unrealizedPnL != null ? toEur(p.unrealizedPnL, p.currency, fx) : 0),
@@ -422,7 +441,7 @@ export function computeValueSeries(
       const price = priceOnOrBefore(historicalByAsset[assetId] ?? [], date)
       if (price != null) holdings += toEur(price * q, asset.currency, fx)
     }
-    const cash = computeCash(upTo, fx)
+    const cash = computeClampedCash(upTo, fx)
     const invested = computeInvestedCapital(upTo, fx)
     const livret = computeAllLivretInterest(accounts, upTo, fx, new Date(date))
     return {

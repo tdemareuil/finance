@@ -37,7 +37,9 @@ const COLUMN_LABEL: Record<GenericColumn, string> = {
 export default function CsvImportPage() {
   const { user } = useAuth()
   const { accounts, assets, transactions, reload } = usePortfolio()
-  const [broker, setBroker] = useState<Broker>('AUTO')
+  // Le format est toujours auto-détecté (Fortuneo .xls / .csv, Trade Republic),
+  // avec repli sur un mapping manuel si le CSV n'est pas reconnu.
+  const broker: Broker = 'AUTO'
   const [parsed, setParsed] = useState<ParsedCsv | null>(null)
   const [preset, setPreset] = useState<BrokerImportResult | null>(null)
   const [targetAccount, setTargetAccount] = useState('')
@@ -172,15 +174,6 @@ export default function CsvImportPage() {
       <Card title="Fichier et format">
         <div className="import-controls">
           <label className="field">
-            <span>Format</span>
-            <select value={broker} onChange={(e) => setBroker(e.target.value as Broker)}>
-              <option value="AUTO">Auto-détection</option>
-              <option value="GENERIC">Générique</option>
-              <option value="TRADE_REPUBLIC">Trade Republic</option>
-              <option value="FORTUNEO">Fortuneo</option>
-            </select>
-          </label>
-          <label className="field">
             <span>Fichier CSV ou Excel</span>
             <input
               type="file"
@@ -192,6 +185,12 @@ export default function CsvImportPage() {
             />
           </label>
         </div>
+        <p className="muted small">Le format est reconnu automatiquement.</p>
+        {busy && !preview && <p className="muted">Lecture du fichier…</p>}
+      </Card>
+
+      {/* Formats reconnus automatiquement */}
+      <Card title="Formats possibles">
         <p className="muted small">
           <strong>Fortuneo</strong> : l'export « portefeuille détaillé » (.xls) est reconnu
           automatiquement ; chaque position devient un achat au PRU (instantané). L'« historique
@@ -200,7 +199,6 @@ export default function CsvImportPage() {
           <strong>Trade Republic</strong> : l'export CSV de transactions est reconnu automatiquement ;
           chaque ligne (dépôt, achat/vente, dividende, intérêt, frais) devient une opération datée.
         </p>
-        {busy && !preview && <p className="muted">Lecture du fichier…</p>}
       </Card>
 
       {/* Preset broker (Fortuneo / Trade Republic) : bandeau explicatif */}
