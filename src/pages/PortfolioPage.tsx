@@ -207,7 +207,6 @@ export default function PortfolioPage() {
               sub={netSub}
             />
             <StatCard label="Dividendes reçus" value={formatMoney(dividendsReceived)} tone="positive" sub={netSub} />
-            <StatCard label="Frais payés" value={formatMoney(s.feesPaid)} tone="negative" />
             {(s.livretInterestAccrued > 0 || s.livretInterestCredited > 0) && (
               <StatCard
                 label="Intérêts Livret+ (année en cours)"
