@@ -38,6 +38,11 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
 - Calcul des positions : quantité, **PRU** (prix de revient moyen pondéré), coût d'acquisition,
   plus-values latente et réalisée, dividendes, frais
 - Performance globale et annualisée, comparaison avec un benchmark **MSCI World**
+- Bascule **« Net d'impôts »** (persistée) : retranche l'impôt estimé de **toutes les valeurs de
+  gains** (plus-values latente/réalisée, dividendes, performance globale/annualisée en % et perf.
+  par ligne). Hypothèses fiscales : **CTO** flat tax 30 %, **PEA/PEE** régime > 5 ans → prélèvements
+  sociaux 17,2 %, **PER** 30 % en sortie, **livrets exonérés (0 %)**. Plus- et moins-values se
+  compensent au sein d'un même régime ; les pertes ne créent pas de crédit d'impôt.
 - Page unique **Portefeuille** (tableau de bord + positions fusionnés, page par défaut) : synthèse,
   évolution du patrimoine vs benchmark, liste **« Mes actifs »** (titres **et** livrets/plans
   d'épargne, dont le solde constitue l'actif) groupée au choix par **compte / type / niveau de

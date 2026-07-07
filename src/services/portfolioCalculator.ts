@@ -16,6 +16,35 @@ export function isInterestBearing(type: AccountType): boolean {
   return INTEREST_BEARING_TYPES.includes(type)
 }
 
+/**
+ * Taux d'imposition estimé sur les plus-values et dividendes, par type de compte.
+ * Hypothèses (mode « Net d'impôts ») :
+ *  - CTO : PFU / flat tax = 30 % (12,8 % IR + 17,2 % prélèvements sociaux).
+ *  - PEA : régime > 5 ans → prélèvements sociaux seuls = 17,2 %.
+ *  - PEE : épargne salariale > 5 ans → prélèvements sociaux seuls = 17,2 %.
+ *  - PER : sortie en capital → PFU sur la part de gains = 30 %.
+ *  - Livrets (A, LDDS, Livret+) : exonérés → 0 %.
+ * Les pertes ne génèrent aucun crédit d'impôt.
+ */
+export const CAPITAL_GAINS_TAX_RATE: Record<AccountType, number> = {
+  CTO: 0.3,
+  PEA: 0.172,
+  PEE: 0.172,
+  PER: 0.3,
+  LIVRET_A: 0,
+  LDDS: 0,
+  LIVRET_PLUS: 0,
+}
+
+export function taxRateFor(type: AccountType): number {
+  return CAPITAL_GAINS_TAX_RATE[type] ?? 0
+}
+
+/** Gain net d'impôts : un gain positif est amputé du taux ; une perte est inchangée. */
+export function afterTax(gain: number, rate: number): number {
+  return gain > 0 ? gain * (1 - rate) : gain
+}
+
 // ---------------------------------------------------------------------------
 // Moteur de calcul du portefeuille (fonctions pures, testables).
 // Toutes les valeurs monétaires agrégées sont converties dans la devise
@@ -329,6 +358,46 @@ export function computeDividends(transactions: Transaction[], fx: FxTable = DEFA
   return transactions
     .filter((t) => t.type === 'DIVIDEND')
     .reduce((s, t) => s + toEur(t.amount ?? 0, t.currency, fx), 0)
+}
+
+/**
+ * Impôt estimé (EUR) sur les gains des positions, ventilé par nature, selon le
+ * régime fiscal de chaque compte (voir CAPITAL_GAINS_TAX_RATE).
+ * Plus-values (latentes / réalisées) : moins-values et plus-values se compensent
+ * au sein d'un même régime fiscal ; seul le solde positif est imposé (estimation
+ * « si je liquidais aujourd'hui »). Dividendes : toujours imposés (pas de
+ * compensation avec les moins-values). Les livrets (taux 0) sont exonérés.
+ */
+export function computeTaxOnGains(
+  positions: Position[],
+  fx: FxTable = DEFAULT_FX,
+): { onUnrealized: number; onRealized: number; onDividends: number; total: number } {
+  // Regroupe les gains par taux d'imposition (un régime = un taux).
+  const byRate = new Map<number, { unrealized: number; realized: number; dividends: number }>()
+  for (const p of positions) {
+    const rate = taxRateFor(p.account.type)
+    if (rate <= 0) continue
+    const b = byRate.get(rate) ?? { unrealized: 0, realized: 0, dividends: 0 }
+    b.unrealized += toEur(p.unrealizedPnL ?? 0, p.currency, fx)
+    b.realized += toEur(p.realizedPnL, p.currency, fx)
+    if (p.dividendsReceived > 0) b.dividends += toEur(p.dividendsReceived, p.currency, fx)
+    byRate.set(rate, b)
+  }
+  let onUnrealized = 0
+  let onRealized = 0
+  let onDividends = 0
+  for (const [rate, b] of byRate) {
+    onUnrealized += rate * Math.max(0, b.unrealized)
+    onRealized += rate * Math.max(0, b.realized)
+    onDividends += rate * b.dividends
+  }
+  const r2 = (x: number) => Math.round(x * 100) / 100
+  return {
+    onUnrealized: r2(onUnrealized),
+    onRealized: r2(onRealized),
+    onDividends: r2(onDividends),
+    total: r2(onUnrealized + onRealized + onDividends),
+  }
 }
 
 function firstTransactionDate(transactions: Transaction[]): string | null {

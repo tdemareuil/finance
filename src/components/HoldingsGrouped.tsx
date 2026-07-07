@@ -11,7 +11,7 @@ import {
   signClass,
   type RiskLevel,
 } from '../utils'
-import { computeCash, computeSavingsBalance, isInterestBearing } from '../services/portfolioCalculator'
+import { afterTax, computeCash, computeSavingsBalance, isInterestBearing, taxRateFor } from '../services/portfolioCalculator'
 import { getConsensus } from '../services/analysisService'
 import CashLineModal from './CashLineModal'
 
@@ -58,6 +58,8 @@ interface Holding {
   currentValue: number
   /** Titre : performance. */
   performancePct?: number | null
+  /** Titre : taux d'imposition du compte (pour la perf. nette d'impôts). */
+  taxRate?: number
   /** Livret : taux d'intérêt annuel (affiché dans la colonne Perf.). */
   rate?: number
   weight: number
@@ -139,6 +141,7 @@ export default function HoldingsGrouped({
   transactions,
   totalValue,
   userId,
+  netOfTax = false,
   onChanged,
 }: {
   positions: Position[]
@@ -146,6 +149,7 @@ export default function HoldingsGrouped({
   transactions: Transaction[]
   totalValue: number
   userId: string
+  netOfTax?: boolean
   onChanged: () => void | Promise<void>
 }) {
   const [mode, setMode] = useState<GroupMode>('account')
@@ -196,6 +200,7 @@ export default function HoldingsGrouped({
         pru: p.averageCost,
         currentValue: p.currentValue ?? 0,
         performancePct: p.performancePct,
+        taxRate: taxRateFor(p.account.type),
         weight: p.weight,
         currency: p.currency,
       }))
@@ -305,7 +310,7 @@ export default function HoldingsGrouped({
                     <td className={`num ${h.kind === 'security' ? signClass(h.performancePct) : ''}`}>
                       {h.kind === 'security'
                         ? h.performancePct != null
-                          ? formatPct(h.performancePct)
+                          ? formatPct(netOfTax ? afterTax(h.performancePct, h.taxRate ?? 0) : h.performancePct)
                           : '—'
                         : h.rate != null
                           ? `${(h.rate * 100).toFixed(2)} %`

@@ -18,8 +18,10 @@ import {
   type SavingsAllocItem,
 } from '../utils'
 import { formatMoney, formatPct, signClass } from '../utils'
-import { computeSavingsBalance } from '../services/portfolioCalculator'
+import { computeSavingsBalance, computeTaxOnGains } from '../services/portfolioCalculator'
 import type { AccountType } from '../types'
+
+const NET_OF_TAX_KEY = 'patrimoine-net-of-tax'
 
 // Opérations saisissables manuellement (le menu « + »). Les opérations de
 // bourse (achat/vente) passent exclusivement par l'import CSV.
@@ -54,6 +56,12 @@ export default function PortfolioPage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [op, setOp] = useState<Op | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const [netOfTax, setNetOfTax] = useState<boolean>(() => localStorage.getItem(NET_OF_TAX_KEY) === '1')
+
+  function toggleNetOfTax(v: boolean) {
+    setNetOfTax(v)
+    localStorage.setItem(NET_OF_TAX_KEY, v ? '1' : '0')
+  }
 
   useEffect(() => {
     if (!menuOpen) return
@@ -75,6 +83,25 @@ export default function PortfolioPage() {
 
   const s = summary
   const open = positions.filter((p) => p.quantity > 0)
+  // Mode « Net d'impôts » : on retranche l'impôt estimé des gains (les livrets
+  // sont exonérés). Les pertes ne génèrent pas de crédit d'impôt.
+  const tax = computeTaxOnGains(positions)
+  const unrealizedPnL = netOfTax ? s.unrealizedPnL - tax.onUnrealized : s.unrealizedPnL
+  const realizedPnL = netOfTax ? s.realizedPnL - tax.onRealized : s.realizedPnL
+  const dividendsReceived = netOfTax ? s.dividendsReceived - tax.onDividends : s.dividendsReceived
+  const totalReturnPct =
+    netOfTax && s.investedCapital > 0
+      ? (s.totalValue - tax.total - s.investedCapital) / s.investedCapital
+      : s.totalReturnPct
+  const annualizedReturnPct = (() => {
+    if (!netOfTax) return s.annualizedReturnPct
+    if (totalReturnPct == null || s.annualizedReturnPct == null || s.totalReturnPct == null) return s.annualizedReturnPct
+    // Réannualise à partir de la performance nette, sur le même horizon.
+    const years = Math.log(1 + s.totalReturnPct) / Math.log(1 + s.annualizedReturnPct)
+    if (!Number.isFinite(years) || years <= 0) return s.annualizedReturnPct
+    return Math.pow(1 + totalReturnPct, 1 / years) - 1
+  })()
+  const netSub = netOfTax ? 'net d’impôts' : undefined
   // Soldes d'épargne (livrets, PER, PEE) intégrés aux camemberts d'allocation.
   const savingsAlloc: SavingsAllocItem[] = accounts
     .filter((a) => isSavingsAccount(a.type))
@@ -141,27 +168,45 @@ export default function PortfolioPage() {
             <div className="alert alert-warn">{marketError} Les valeurs affichées peuvent être partielles.</div>
           )}
 
+          <div className="toolbar-row">
+            <label className="switch" title="Retrancher l’impôt estimé des plus-values et dividendes (livrets exonérés ; PEA au régime > 5 ans).">
+              <input
+                type="checkbox"
+                checked={netOfTax}
+                onChange={(e) => toggleNetOfTax(e.target.checked)}
+              />
+              <span className="track" />
+              <span>Net d’impôts</span>
+            </label>
+          </div>
+
           <div className="stat-grid">
             <StatCard label="Valeur totale" value={formatMoney(s.totalValue)} />
             <StatCard label="Capital investi net" value={formatMoney(s.investedCapital)} />
             <StatCard label="Cash disponible" value={formatMoney(s.cash)} />
             <StatCard
               label="Performance globale"
-              value={formatPct(s.totalReturnPct)}
-              tone={signClass(s.totalReturnPct) as 'positive' | 'negative' | 'neutral'}
-              sub={s.annualizedReturnPct != null ? `${formatPct(s.annualizedReturnPct)} / an` : undefined}
+              value={formatPct(totalReturnPct)}
+              tone={signClass(totalReturnPct) as 'positive' | 'negative' | 'neutral'}
+              sub={
+                annualizedReturnPct != null
+                  ? `${formatPct(annualizedReturnPct)} / an${netOfTax ? ' · net d’impôts' : ''}`
+                  : netSub
+              }
             />
             <StatCard
               label="Plus-value latente"
-              value={formatMoney(s.unrealizedPnL)}
-              tone={signClass(s.unrealizedPnL) as 'positive' | 'negative' | 'neutral'}
+              value={formatMoney(unrealizedPnL)}
+              tone={signClass(unrealizedPnL) as 'positive' | 'negative' | 'neutral'}
+              sub={netSub}
             />
             <StatCard
               label="Plus-value réalisée"
-              value={formatMoney(s.realizedPnL)}
-              tone={signClass(s.realizedPnL) as 'positive' | 'negative' | 'neutral'}
+              value={formatMoney(realizedPnL)}
+              tone={signClass(realizedPnL) as 'positive' | 'negative' | 'neutral'}
+              sub={netSub}
             />
-            <StatCard label="Dividendes reçus" value={formatMoney(s.dividendsReceived)} tone="positive" />
+            <StatCard label="Dividendes reçus" value={formatMoney(dividendsReceived)} tone="positive" sub={netSub} />
             <StatCard label="Frais payés" value={formatMoney(s.feesPaid)} tone="negative" />
             {(s.livretInterestAccrued > 0 || s.livretInterestCredited > 0) && (
               <StatCard
@@ -194,13 +239,14 @@ export default function PortfolioPage() {
               transactions={transactions}
               totalValue={s.totalValue}
               userId={user!.id}
+              netOfTax={netOfTax}
               onChanged={reload}
             />
           </Card>
 
           {positions.some((p) => p.quantity <= 1e-9 && (p.realizedPnL !== 0 || p.dividendsReceived !== 0)) && (
             <Card title="Positions clôturées">
-              <ClosedPositions positions={positions} />
+              <ClosedPositions positions={positions} netOfTax={netOfTax} />
             </Card>
           )}
 
