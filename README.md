@@ -105,7 +105,8 @@ npm install
      [`migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql) (dédup `external_id` + index unique),
      [`migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql) (table `rsu_grants` + RLS),
      [`migration_account_types.sql`](supabase/migration_account_types.sql) (types de compte Livret A / LDDS / PER / PEE),
-     [`migration_accounts_unique.sql`](supabase/migration_accounts_unique.sql) (index unique anti-doublon sur `(user_id, type, nom)`).
+     [`migration_accounts_unique.sql`](supabase/migration_accounts_unique.sql) (index unique anti-doublon sur `(user_id, type, nom)`),
+     [`migration_asset_columns.sql`](supabase/migration_asset_columns.sql) (garantit les colonnes `sector`, `country`, `trading_view_symbol`, `eodhd_symbol`, `finnhub_symbol` sur `assets` — nécessaire si l'import crée de nouveaux actifs enrichis).
 4. Créez votre utilisateur dans *Authentication → Users → Add user* (il n'y a pas d'inscription
    en libre-service dans l'app). Laissez le provider **Email** activé ; pour tester rapidement,
    vous pouvez désactiver la confirmation email (*Authentication → Sign In / Providers → Confirm email*).

@@ -101,9 +101,31 @@ export function assetRisk(asset: Asset): RiskLevel {
   return 'Élevé'
 }
 
+// --- Description d'erreur lisible ------------------------------------------
+// Les erreurs Supabase (PostgREST) sont des objets simples `{ message, details,
+// hint, code }`, PAS des instances d'Error : `err instanceof Error` est faux et
+// `String(err)` donne « [object Object] ». On extrait ici un message exploitable.
+export function errorMessage(err: unknown): string {
+  if (err == null) return 'Erreur inconnue.'
+  if (typeof err === 'string') return err
+  if (err instanceof Error && err.message) return err.message
+  const e = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown }
+  const parts = [e.message, e.details, e.hint]
+    .filter((p): p is string => typeof p === 'string' && p.trim() !== '')
+  if (parts.length) {
+    const code = typeof e.code === 'string' && e.code ? ` [${e.code}]` : ''
+    return parts.join(' — ') + code
+  }
+  try {
+    return JSON.stringify(err)
+  } catch {
+    return String(err)
+  }
+}
+
 // --- Détection d'erreur réseau (serveur injoignable / bloqué) --------------
 export function isUnreachableError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err)
+  const msg = errorMessage(err)
   const status =
     typeof (err as { status?: unknown })?.status === 'number'
       ? (err as { status: number }).status

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
 import { Card } from '../components/ui'
-import { isUnreachableError } from '../utils'
+import { errorMessage, isUnreachableError } from '../utils'
 import {
   buildImportPreview,
   executeImport,
@@ -154,7 +154,7 @@ export default function CsvImportPage() {
             "n'a été enregistrée.",
         )
       } else {
-        setError(e instanceof Error ? e.message : "L'import a échoué.")
+        setError(`L'import a échoué : ${errorMessage(e)}`)
       }
     } finally {
       setBusy(false)

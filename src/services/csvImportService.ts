@@ -13,7 +13,7 @@ import { createAsset } from './assetService'
 import { createTransactionsBulk } from './transactionService'
 import { createImportBatch, updateImportBatch } from './importBatchService'
 import { resolveSymbol } from './symbolLookupService'
-import { ACCOUNT_TYPE_LABEL } from '../utils'
+import { ACCOUNT_TYPE_LABEL, errorMessage } from '../utils'
 
 // ---------------------------------------------------------------------------
 // Import CSV générique avec mapping manuel des colonnes.
@@ -767,6 +767,8 @@ export async function executeImport(
             name,
             type: options.defaultAccountType,
             currency: 'EUR',
+          }).catch((e) => {
+            throw new Error(`Création du compte « ${name} » : ${errorMessage(e)}`)
           })
           accountByName.set(name.toLowerCase(), created)
           createdAccounts++
@@ -816,6 +818,8 @@ export async function executeImport(
           country,
           currency: a.currency,
           type: 'STOCK',
+        }).catch((e) => {
+          throw new Error(`Création de l'actif « ${a.name} » : ${errorMessage(e)}`)
         })
         if (created.ticker) assetByTicker.set(created.ticker.toLowerCase(), created)
         if (created.isin) assetByIsin.set(created.isin.toLowerCase(), created)
@@ -865,7 +869,9 @@ export async function executeImport(
       })
     }
 
-    const inserted = await createTransactionsBulk(toInsert)
+    const inserted = await createTransactionsBulk(toInsert).catch((e) => {
+      throw new Error(`Insertion des transactions : ${errorMessage(e)}`)
+    })
     await updateImportBatch(batch.id, { status: 'IMPORTED' })
 
     return {
