@@ -211,6 +211,10 @@ input:focus, select:focus, textarea:focus {
 .provider-role { margin-left: auto; white-space: nowrap; }
 .provider-step.active .provider-role { color: var(--primary-dark); font-weight: 600; }
 
+/* Prochaine publication de résultats (onglet Analyse) */
+.earnings-block { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.earnings-date { font-size: 20px; font-weight: 700; }
+
 /* =====================================================================
    App shell / layout
    ===================================================================== */

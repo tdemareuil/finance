@@ -16,7 +16,7 @@ export type DataCapability =
   | 'PRICE_TARGET'
   | 'RECOMMENDATION_TRENDS'
   | 'NEWS'
-  | 'FUNDAMENTALS'
+  | 'NEXT_EARNINGS'
 
 export type ProviderName = 'twelvedata' | 'finnhub' | 'fmp'
 

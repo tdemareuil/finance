@@ -2,9 +2,9 @@ import type {
   AnalystConsensus,
   AnalystRecommendation,
   Asset,
-  CompanyFundamentals,
   CompanyNewsItem,
   MarketPrice,
+  NextEarnings,
 } from '../../types'
 import type { CacheParams, DataCapability, DataProvider } from './types'
 import { computeRating } from '../consensus'
@@ -53,7 +53,7 @@ const CAPABILITIES: DataCapability[] = [
   'ANALYST_CONSENSUS',
   'RECOMMENDATION_TRENDS',
   'NEWS',
-  'FUNDAMENTALS',
+  'NEXT_EARNINGS',
 ]
 
 export const finnhubProvider: DataProvider = {
@@ -115,27 +115,29 @@ export const finnhubProvider: DataProvider = {
           }))
       }
 
-      case 'FUNDAMENTALS': {
-        type Metric = Record<string, number | undefined>
-        const data = await getJson<{ metric?: Metric }>(
-          `${BASE}/stock/metric?symbol=${encodeURIComponent(symbol)}&metric=all`,
+      case 'NEXT_EARNINGS': {
+        const today = new Date()
+        const to = new Date(today)
+        to.setMonth(to.getMonth() + 6)
+        const from = today.toISOString().slice(0, 10)
+        const toStr = to.toISOString().slice(0, 10)
+        type Row = { date: string; epsEstimate?: number | null; hour?: string }
+        const data = await getJson<{ earningsCalendar?: Row[] }>(
+          `${BASE}/calendar/earnings?symbol=${encodeURIComponent(symbol)}&from=${from}&to=${toStr}`,
         )
-        const m = data?.metric
-        if (!m) return null
-        const f: CompanyFundamentals = {
+        const rows = data?.earningsCalendar ?? []
+        const next = rows
+          .filter((r) => r.date && r.date >= from)
+          .sort((a, b) => (a.date < b.date ? -1 : 1))[0]
+        if (!next) return null
+        const ne: NextEarnings = {
           assetId: asset.id,
           symbol,
-          marketCapitalization: m.marketCapitalization,
-          peNormalizedAnnual: m.peNormalizedAnnual,
-          peBasicExclExtraTTM: m.peBasicExclExtraTTM,
-          epsBasicExclExtraItemsTTM: m.epsBasicExclExtraItemsTTM,
-          dividendYieldIndicatedAnnual: m.dividendYieldIndicatedAnnual,
-          beta: m.beta,
-          week52High: m['52WeekHigh'],
-          week52Low: m['52WeekLow'],
-          currency: asset.currency,
+          date: next.date,
+          epsEstimate: next.epsEstimate ?? undefined,
+          hour: next.hour,
         }
-        return f
+        return ne
       }
 
       default:

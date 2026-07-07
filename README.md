@@ -63,7 +63,7 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
   manuelle — **grant RSU** ou **versement/retrait** sur un livret ou plan d'épargne (Livret A, LDDS,
   Livret+, PER, PEE). Les achats/ventes de bourse passent uniquement par l'import CSV
 - **Barre de recherche globale** (Finnhub, dans la barre supérieure) par nom / ticker / ISIN, avec
-  fiche marché rapide (graphique TradingView + analyse : consensus, objectifs, news, fondamentaux)
+  fiche marché rapide (graphique TradingView + analyse : consensus, objectifs, news, prochains résultats)
 - **RSU** : grants avec calendrier de **vesting** (cliff ou mensuel), plateforme (EquatePlus / Carta),
   suivi des actions acquises / à venir — affichés sur la fiche du titre concerné
 - Dividendes reçus par mois et par actif, rendement sur coût, calendrier des dividendes
@@ -72,8 +72,8 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
 - Page détail d'un actif en **onglets** (Performance, Analyse, Transactions) : l'onglet
   **Performance** regroupe le graphique **TradingView** (mode région, thème sombre), les métriques
   de la ligne, le **vesting RSU** et les **dividendes** (reçus, historique du titre, à venir)
-- Onglet **Analyse** (via **Finnhub**) : consensus analystes, objectifs de cours, tendance des
-  recommandations, actualités récentes, fondamentaux clés — avec repli mock
+- Onglet **Analyse** (FMP → Finnhub) : **prochaine publication de résultats**, consensus analystes,
+  objectifs de cours, tendance des recommandations, actualités récentes
 - Messages de connexion explicites : distinguent un **serveur injoignable / bloqué** (projet Supabase
   en pause, filtrage réseau) d'un **mot de passe incorrect**
 
@@ -125,7 +125,7 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxx
 # --- Données de marché / analyse (optionnel : vide = données mock déterministes) ---
 VITE_TWELVE_DATA_API_KEY=    # marché principal : cours + historiques (twelvedata.com)
 VITE_FMP_API_KEY=            # marché (fallback) + analyse (principal) : dividendes, consensus… (financialmodelingprep.com)
-VITE_FINNHUB_API_KEY=        # fallback marché + analyse : cours, consensus, news, fondamentaux (finnhub.io)
+VITE_FINNHUB_API_KEY=        # fallback marché + analyse : cours, consensus, news, résultats (finnhub.io)
 
 # --- Divers (optionnel) ---
 VITE_DEFAULT_BENCHMARK=CW8.PA   # benchmark MSCI World (symbole FMP)
@@ -317,8 +317,8 @@ les providers via `fetchWithFallback` (`src/services/apiCacheService.ts`).
 
 | Service | Ordre des providers |
 |---|---|
-| `marketDataService` (cours, historique, dividendes, splits) | **Twelve Data → FMP → Finnhub → Mock** |
-| `analysisService` (consensus, objectifs, tendances, news, fondamentaux) | **FMP → Finnhub → Mock** |
+| `marketDataService` (cours, historique, dividendes, splits) | **Twelve Data → FMP → Finnhub** |
+| `analysisService` (consensus, objectifs, tendances, news, prochains résultats) | **FMP → Finnhub** |
 
 **Twelve Data** est le provider de marché **principal** (cours + historiques) : ajoutez
 `VITE_TWELVE_DATA_API_KEY` (clé gratuite sur [twelvedata.com](https://twelvedata.com)). **FMP** est le
@@ -329,36 +329,54 @@ l'app bascule sur le **mock** déterministe.
 
 **Capabilities** : chaque provider déclare ce qu'il sait fournir (`LATEST_PRICE`,
 `HISTORICAL_PRICES`, `DIVIDENDS`, `SPLITS`, `ANALYST_CONSENSUS`, `PRICE_TARGET`,
-`RECOMMENDATION_TRENDS`, `NEWS`, `FUNDAMENTALS`). Un provider n'est jamais appelé pour une
+`RECOMMENDATION_TRENDS`, `NEWS`, `NEXT_EARNINGS`). Un provider n'est jamais appelé pour une
 capacité qu'il ne supporte pas.
 
 **Stratégie anti-crédits** (`apiCacheService`) :
 
 - **Cache mémoire + LocalStorage** avec TTL par type de donnée.
-- Les **résultats vides** (`EMPTY`) et les **erreurs contrôlées** (`ERROR`, ex. endpoint payant
-  402/403, quota 429) sont **aussi mis en cache** — on ne redemande pas une donnée absente
-  pendant le TTL (erreurs : 1 h).
-- **Déduplication in-flight** : deux appels identiques simultanés partagent la même promesse
-  (une seule requête réseau).
+- Les **résultats vides** (`EMPTY`) et les **erreurs contrôlées** (`ERROR`) sont **aussi mis en
+  cache**. Le TTL d'erreur dépend de la nature (#2) : **transitoire** (quota 429, 5xx, réseau)
+  → **1 h** (on réessaie vite) ; **permanent** (symbole inconnu 404, endpoint payant 402/403,
+  clé invalide 401, requête invalide 400/422) → **7 jours** (inutile de re-solliciter). Évite de
+  retenter en boucle un symbole qui ne résout sur aucun provider.
+- **Cours (`LATEST_PRICE`) selon l'ouverture des marchés (#3)** : TTL 30 min en séance, **4 h la
+  nuit**, **24 h le week-end** — les prix ne bougent pas marché fermé.
+- **Déduplication in-flight** : deux appels identiques simultanés partagent la même promesse.
 - **Rouvrir un actif ne relance aucun appel** tant que le cache est frais (clé de cache
   déterministe `provider:capability:symbole:params`).
-- L'onglet **Analyse** n'est chargé qu'à son ouverture ; les dividendes d'un titre au premier
-  affichage de sa fiche (puis servis par le cache).
+- **Consensus dérivé, pas re-fetché** : l'onglet Analyse calcule le consensus à partir des
+  tendances de recommandation qu'il charge déjà (mêmes données que la mini-barre du portefeuille,
+  cache `RECOMMENDATION_TRENDS` partagé) → aucun appel dédié au consensus.
+- L'onglet **Analyse** n'est chargé qu'à son ouverture ; les dividendes au premier affichage.
 
 **TTL par type de donnée :**
 
 | Donnée | TTL |
 |---|---|
-| Latest price | 15 min |
+| Latest price | 30 min (séance) · 4 h (nuit) · 24 h (week-end) |
 | Historical prices | 24 h |
 | Dividends / Splits | 7 jours |
 | Analyst consensus / Price target / Recommendation trends | 24 h |
 | News | 6 h |
-| Fundamentals | 24 h |
-| Erreurs contrôlées | 1 h |
+| Next earnings | 24 h |
+| Erreurs — transitoires / permanentes | 1 h / 7 jours |
 
 La **source réellement utilisée** est affichée discrètement (« Source : Twelve Data / FMP /
 Finnhub / données de démonstration »). Un fallback réussi n'affiche jamais d'erreur.
+
+**Pistes d'optimisation non encore implémentées** (voir aussi l'assessment produit) :
+
+- **Requêtes groupées (batch)** : Twelve Data (`/price?symbol=A,B,C`) et FMP (`/quote/A,B,C`)
+  acceptent plusieurs symboles par appel → transformerait *N* appels de cours en **1** au
+  chargement du portefeuille (le plus gros levier).
+- **Mapping des symboles Euronext pour Twelve Data** : les tickers `.PA` / `.AS` sont rejetés
+  (404) par Twelve Data et basculent en repli FMP ; un format adapté (`exchange`/MIC) les ferait
+  résoudre sur le provider principal, sans cascade.
+- **Throttle du burst de chargement** : `PortfolioContext` lance tous les cours en parallèle
+  (`Promise.all`), ce qui peut dépasser la limite gratuite Twelve Data (8 req/min) et provoquer
+  des 429 inutiles ; un étalement (~6 req/min) l'éviterait (largement atténué si le batch ci-dessus
+  est fait).
 
 ## 10. Limites connues du prototype
 
@@ -390,14 +408,13 @@ Journal des choix non triviaux et des pistes d'amélioration, pour reprendre le 
 
 ### Décisions de conception (et alternatives)
 
-- **Consensus dérivé des tendances de recommandation.** `analysisService.getConsensus` réutilise
-  le résultat de `getRecommendationTrends` (même clé de cache) au lieu d'un appel dédié. Ouvrir
-  l'onglet Analyse coûte donc **3 appels Finnhub, pas 4** (recommandation partagée par consensus
-  + trends via déduplication in-flight, + news + fondamentaux). Les providers déclarent quand
-  même `ANALYST_CONSENSUS`. *Alternative :* endpoint consensus dédié (FMP en a un) — plus de
-  crédits, potentiellement plus précis pour les titres où trends ≠ consensus.
-- **Taux de change EUR/USD fixe** (`portfolioCalculator.DEFAULT_FX`, ~0,92). *Alternative :* taux
-  temps réel / historique par date de transaction.
+- **Consensus dérivé des tendances de recommandation.** L'onglet Analyse **calcule** le consensus
+  à partir des tendances (`RECOMMENDATION_TRENDS`) qu'il charge déjà — mêmes données que la
+  mini-barre du portefeuille (cache partagé) — donc **aucun appel dédié au consensus**. La fiche
+  charge ainsi 4 capacités : objectifs de cours, tendances, actualités, prochains résultats.
+  (`analysisService.getConsensus` existe encore pour les mini-barres du portefeuille.)
+- **Taux de change EUR/USD au cours actuel** (Twelve Data → FMP, repli sur `DEFAULT_FX` ~0,92 si
+  indisponible). *Alternative :* taux historique par date de transaction.
 - **Benchmark MSCI World approché** : on rejoue les flux nets (dépôts − retraits) dans l'ETF aux
   cours historiques. *Alternative :* vraie performance time-weighted (TWR) / money-weighted (MWR).
 - **Série de patrimoine échantillonnée en fin de mois** (graphiques). *Alternative :* pas quotidien.

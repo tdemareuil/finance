@@ -295,16 +295,14 @@ export interface CompanyNewsItem {
   image?: string
 }
 
-export interface CompanyFundamentals {
+/** Prochaine publication de résultats (earnings call). */
+export interface NextEarnings {
   assetId: string
   symbol: string
-  marketCapitalization?: number
-  peNormalizedAnnual?: number
-  peBasicExclExtraTTM?: number
-  epsBasicExclExtraItemsTTM?: number
-  dividendYieldIndicatedAnnual?: number
-  beta?: number
-  week52High?: number
-  week52Low?: number
-  currency?: string
+  /** Date de la publication (YYYY-MM-DD). */
+  date: string
+  /** Estimation du BPA (EPS) si fournie. */
+  epsEstimate?: number
+  /** Moment : 'bmo' (avant ouverture), 'amc' (après clôture), 'dmh' (en séance) ou heure. */
+  hour?: string
 }

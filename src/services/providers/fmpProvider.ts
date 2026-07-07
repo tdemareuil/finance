@@ -2,10 +2,10 @@ import type {
   AnalystConsensus,
   AnalystRecommendation,
   Asset,
-  CompanyFundamentals,
   CompanyNewsItem,
   DividendEvent,
   MarketPrice,
+  NextEarnings,
   PriceTarget,
   StockSplit,
 } from '../../types'
@@ -126,7 +126,7 @@ const ANALYSIS_CAPS: DataCapability[] = [
   'PRICE_TARGET',
   'RECOMMENDATION_TRENDS',
   'NEWS',
-  'FUNDAMENTALS',
+  'NEXT_EARNINGS',
 ]
 
 type FmpRecRow = {
@@ -226,32 +226,23 @@ export const fmpAnalysisProvider: DataProvider = {
         }))
       }
 
-      case 'FUNDAMENTALS': {
-        type Profile = { mktCap?: number; beta?: number; lastDiv?: number; range?: string; price?: number }
-        const rows = await getJson<Profile[]>(`${V3}/profile/${encodeURIComponent(symbol)}`)
-        const p = rows?.[0]
-        if (!p) return null
-        // range "low-high" (52 semaines)
-        let week52Low: number | undefined
-        let week52High: number | undefined
-        if (p.range && p.range.includes('-')) {
-          const [lo, hi] = p.range.split('-').map((n) => Number(n.trim()))
-          if (!Number.isNaN(lo)) week52Low = lo
-          if (!Number.isNaN(hi)) week52High = hi
-        }
-        const dividendYield =
-          p.lastDiv && p.price && p.price > 0 ? Math.round((p.lastDiv / p.price) * 10000) / 100 : undefined
-        const f: CompanyFundamentals = {
+      case 'NEXT_EARNINGS': {
+        type Row = { date: string; epsEstimated?: number | null; time?: string }
+        const rows = await getJson<Row[]>(`${V3}/historical/earning_calendar/${encodeURIComponent(symbol)}`)
+        if (!Array.isArray(rows)) return null
+        const today = new Date().toISOString().slice(0, 10)
+        const next = rows
+          .filter((r) => r.date && r.date >= today)
+          .sort((a, b) => (a.date < b.date ? -1 : 1))[0]
+        if (!next) return null
+        const ne: NextEarnings = {
           assetId: asset.id,
           symbol,
-          marketCapitalization: p.mktCap != null ? p.mktCap / 1_000_000 : undefined, // → millions
-          beta: p.beta,
-          dividendYieldIndicatedAnnual: dividendYield,
-          week52High,
-          week52Low,
-          currency: asset.currency,
+          date: next.date,
+          epsEstimate: next.epsEstimated ?? undefined,
+          hour: next.time,
         }
-        return f
+        return ne
       }
 
       default:

@@ -2,8 +2,8 @@ import type {
   AnalystConsensus,
   AnalystRecommendation,
   Asset,
-  CompanyFundamentals,
   CompanyNewsItem,
+  NextEarnings,
   PriceTarget,
 } from '../types'
 import { fetchWithFallback } from './apiCacheService'
@@ -76,6 +76,6 @@ export function getNews(asset: Asset): Promise<SourcedResult<CompanyNewsItem[]>>
   return fetchWithFallback<CompanyNewsItem[]>('NEWS', asset, { from, to }, ANALYSIS_PROVIDERS)
 }
 
-export function getFundamentals(asset: Asset): Promise<SourcedResult<CompanyFundamentals>> {
-  return fetchWithFallback<CompanyFundamentals>('FUNDAMENTALS', asset, {}, ANALYSIS_PROVIDERS)
+export function getNextEarnings(asset: Asset): Promise<SourcedResult<NextEarnings>> {
+  return fetchWithFallback<NextEarnings>('NEXT_EARNINGS', asset, {}, ANALYSIS_PROVIDERS)
 }

@@ -4,14 +4,14 @@ import type {
   AnalystRating,
   AnalystRecommendation,
   Asset,
-  CompanyFundamentals,
   CompanyNewsItem,
+  NextEarnings,
   PriceTarget,
 } from '../types'
 import {
-  getConsensus,
-  getFundamentals,
+  computeRating,
   getNews,
+  getNextEarnings,
   getPriceTarget,
   getRecommendationTrends,
   isFinnhubConfigured,
@@ -38,12 +38,26 @@ const RATING_TONE: Record<AnalystRating, string> = {
   UNKNOWN: 'default',
 }
 
-function formatMarketCap(millions: number | undefined, currency = 'USD'): string {
-  if (millions == null) return '—'
-  const symbol = currency === 'EUR' ? '€' : '$'
-  if (millions >= 1_000_000) return `${(millions / 1_000_000).toFixed(2)} T${symbol}`
-  if (millions >= 1_000) return `${(millions / 1_000).toFixed(2)} Md${symbol}`
-  return `${millions.toFixed(0)} M${symbol}`
+/** Consensus dérivé de la période la plus récente des tendances (mêmes données
+ *  que la mini-barre du portefeuille, via le cache RECOMMENDATION_TRENDS). */
+function deriveConsensus(asset: Asset, trends: AnalystRecommendation[]): AnalystConsensus | null {
+  const l = trends[0]
+  if (!l) return null
+  const total = l.strongBuy + l.buy + l.hold + l.sell + l.strongSell
+  if (total <= 0) return null
+  return {
+    assetId: asset.id,
+    symbol: l.symbol,
+    period: l.period,
+    strongBuy: l.strongBuy,
+    buy: l.buy,
+    hold: l.hold,
+    sell: l.sell,
+    strongSell: l.strongSell,
+    total,
+    rating: computeRating(l),
+    updatedAt: new Date().toISOString(),
+  }
 }
 
 interface State {
@@ -52,8 +66,26 @@ interface State {
   target: PriceTarget | null
   trends: AnalystRecommendation[]
   news: CompanyNewsItem[]
-  fundamentals: CompanyFundamentals | null
+  earnings: NextEarnings | null
   sources: (ProviderName | 'none')[]
+}
+
+const EARNINGS_HOUR_LABEL: Record<string, string> = {
+  bmo: 'avant ouverture',
+  amc: 'après clôture',
+  dmh: 'pendant la séance',
+}
+
+/** « dans 12 jours » / « aujourd'hui » / « demain » à partir d'une date ISO. */
+function daysUntilLabel(dateIso: string): string {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const d = new Date(dateIso)
+  d.setHours(0, 0, 0, 0)
+  const days = Math.round((d.getTime() - today.getTime()) / 86_400_000)
+  if (days <= 0) return "aujourd'hui"
+  if (days === 1) return 'demain'
+  return `dans ${days} jours`
 }
 
 export default function AssetAnalysis({
@@ -69,7 +101,7 @@ export default function AssetAnalysis({
     target: null,
     trends: [],
     news: [],
-    fundamentals: null,
+    earnings: null,
     sources: [],
   })
 
@@ -79,23 +111,25 @@ export default function AssetAnalysis({
     ;(async () => {
       const empty = { data: null, source: 'none' as const }
       const emptyArr = { data: [], source: 'none' as const }
-      const [consensus, target, trends, news, fundamentals] = await Promise.all([
-        getConsensus(asset).catch(() => empty),
+      // Le consensus n'est PAS fetché séparément : on le dérive des tendances
+      // (mêmes données que la mini-barre du portefeuille, cache partagé).
+      const [target, trends, news, earnings] = await Promise.all([
         getPriceTarget(asset).catch(() => empty),
         getRecommendationTrends(asset).catch(() => emptyArr),
         getNews(asset).catch(() => emptyArr),
-        getFundamentals(asset).catch(() => empty),
+        getNextEarnings(asset).catch(() => empty),
       ])
       if (!active) return
+      const trendsData = trends.data ?? []
       // Sources réellement utilisées (hors 'none'), pour l'affichage discret.
-      const sources = [consensus.source, target.source, trends.source, news.source, fundamentals.source]
+      const sources = [target.source, trends.source, news.source, earnings.source]
       setState({
         loading: false,
-        consensus: consensus.data,
+        consensus: deriveConsensus(asset, trendsData),
         target: target.data,
-        trends: trends.data ?? [],
+        trends: trendsData,
         news: news.data ?? [],
-        fundamentals: fundamentals.data,
+        earnings: earnings.data,
         sources,
       })
     })()
@@ -104,7 +138,7 @@ export default function AssetAnalysis({
     }
   }, [asset])
 
-  const { loading, consensus, target, trends, news, fundamentals, sources } = state
+  const { loading, consensus, target, trends, news, earnings, sources } = state
   const isEtf = asset.type === 'ETF'
   const noFinnhubSymbol = !asset.finnhubSymbol?.trim()
   const usedSources = [...new Set(sources.filter((s) => s !== 'none'))] as ProviderName[]
@@ -132,6 +166,30 @@ export default function AssetAnalysis({
         <Loading label="Chargement des données d'analyse…" />
       ) : (
         <>
+          {/* 0 · Prochaine publication de résultats */}
+          <Card title="Prochains résultats">
+            {earnings ? (
+              <div className="earnings-block">
+                <span className="earnings-date">{formatDate(earnings.date)}</span>
+                <span className="chip chip-default">{daysUntilLabel(earnings.date)}</span>
+                {earnings.hour && (
+                  <span className="muted small">
+                    {EARNINGS_HOUR_LABEL[earnings.hour.toLowerCase()] ?? earnings.hour}
+                  </span>
+                )}
+                {earnings.epsEstimate != null && (
+                  <span className="muted small">· BPA estimé {formatNumber(earnings.epsEstimate)}</span>
+                )}
+              </div>
+            ) : (
+              <p className="muted">
+                {isEtf
+                  ? 'Pas de publication de résultats pour un ETF.'
+                  : 'Date de prochains résultats indisponible pour cet actif.'}
+              </p>
+            )}
+          </Card>
+
           {/* 1 · Consensus analystes */}
           <Card
             title="Consensus analystes"
@@ -262,24 +320,6 @@ export default function AssetAnalysis({
               </ul>
             ) : (
               <p className="muted">Aucune actualité disponible pour cet actif.</p>
-            )}
-          </Card>
-
-          {/* 5 · Fondamentaux */}
-          <Card title="Fondamentaux clés">
-            {fundamentals ? (
-              <ul className="kv-list fundamentals">
-                <li><span>Capitalisation</span><strong>{formatMarketCap(fundamentals.marketCapitalization, fundamentals.currency)}</strong></li>
-                <li><span>PER (normalisé annuel)</span><strong>{formatNumber(fundamentals.peNormalizedAnnual)}</strong></li>
-                <li><span>PER (TTM)</span><strong>{formatNumber(fundamentals.peBasicExclExtraTTM)}</strong></li>
-                <li><span>EPS (TTM)</span><strong>{formatMoney(fundamentals.epsBasicExclExtraItemsTTM, asset.currency)}</strong></li>
-                <li><span>Rendement du dividende</span><strong>{fundamentals.dividendYieldIndicatedAnnual != null ? `${formatNumber(fundamentals.dividendYieldIndicatedAnnual)} %` : '—'}</strong></li>
-                <li><span>Bêta</span><strong>{formatNumber(fundamentals.beta)}</strong></li>
-                <li><span>Plus haut 52 sem.</span><strong>{formatMoney(fundamentals.week52High, asset.currency)}</strong></li>
-                <li><span>Plus bas 52 sem.</span><strong>{formatMoney(fundamentals.week52Low, asset.currency)}</strong></li>
-              </ul>
-            ) : (
-              <p className="muted">Fondamentaux indisponibles pour cet actif.</p>
             )}
           </Card>
 

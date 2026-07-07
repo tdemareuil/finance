@@ -1,4 +1,4 @@
-import type { Asset, CompanyFundamentals, MarketPrice, PriceTarget } from '../types'
+import type { Asset, MarketPrice, PriceTarget } from '../types'
 import type {
   CacheParams,
   DataCapability,
@@ -29,21 +29,61 @@ export interface CachedApiResult<T> {
   errorMessage?: string
 }
 
+const MINUTE = 60 * 1000
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
+
 // --- TTL par capability ----------------------------------------------------
 export const CACHE_TTL: Record<DataCapability, number> = {
-  LATEST_PRICE: 15 * 60 * 1000,
-  HISTORICAL_PRICES: 24 * 60 * 60 * 1000,
-  DIVIDENDS: 7 * 24 * 60 * 60 * 1000,
-  SPLITS: 7 * 24 * 60 * 60 * 1000,
-  ANALYST_CONSENSUS: 24 * 60 * 60 * 1000,
-  PRICE_TARGET: 24 * 60 * 60 * 1000,
-  RECOMMENDATION_TRENDS: 24 * 60 * 60 * 1000,
-  NEWS: 6 * 60 * 60 * 1000,
-  FUNDAMENTALS: 24 * 60 * 60 * 1000,
+  LATEST_PRICE: 30 * MINUTE, // base ; ajusté selon l'ouverture des marchés (voir ttlFor)
+  HISTORICAL_PRICES: 24 * HOUR,
+  DIVIDENDS: 7 * DAY,
+  SPLITS: 7 * DAY,
+  ANALYST_CONSENSUS: 24 * HOUR,
+  PRICE_TARGET: 24 * HOUR,
+  RECOMMENDATION_TRENDS: 24 * HOUR,
+  NEWS: 6 * HOUR,
+  NEXT_EARNINGS: 24 * HOUR,
 }
 
-/** TTL court pour les erreurs contrôlées (quota, endpoint payant, symbole inconnu…). */
-export const ERROR_TTL = 60 * 60 * 1000
+/**
+ * TTL effectif d'un cours (#3) : les prix ne bougent pas marché fermé, donc on
+ * garde le cache bien plus longtemps la nuit et le week-end pour économiser des
+ * appels. Heure locale du navigateur (Europe pour l'utilisateur).
+ */
+export function latestPriceTtl(now: Date = new Date()): number {
+  const day = now.getDay() // 0 = dimanche, 6 = samedi
+  if (day === 0 || day === 6) return 24 * HOUR // week-end : marchés fermés
+  const h = now.getHours()
+  // Hors ~08h–23h (Euronext + sessions US converties Paris) : marchés fermés.
+  if (h < 8 || h >= 23) return 4 * HOUR
+  return 30 * MINUTE // séance : rafraîchissement modéré
+}
+
+/** TTL d'un résultat valide (HIT) ou vide (EMPTY), par capability. */
+function ttlFor(capability: DataCapability): number {
+  return capability === 'LATEST_PRICE' ? latestPriceTtl() : CACHE_TTL[capability]
+}
+
+/** TTL des erreurs transitoires (quota 429, 5xx, réseau) : on réessaie vite. */
+export const ERROR_TTL = 1 * HOUR
+/** TTL des erreurs « permanentes » (symbole inconnu 404, endpoint payant 402/403,
+ *  clé invalide 401, requête invalide 400/422) : inutile de re-solliciter souvent. */
+export const PERMANENT_ERROR_TTL = 7 * DAY
+
+/**
+ * Classe une erreur contrôlée pour choisir son TTL de cache (#2).
+ * Les providers lèvent des messages du type « FMP 402 », « TwelveData 404 »,
+ * « Finnhub 429 » ; on en extrait le code HTTP. Sans code (erreur réseau), on
+ * traite comme transitoire.
+ */
+export function errorTtlFor(message: string): number {
+  const m = /\b([45]\d\d)\b/.exec(message)
+  const code = m ? Number(m[1]) : 0
+  if (code === 429 || code >= 500) return ERROR_TTL // quota / serveur → transitoire
+  if (code >= 400) return PERMANENT_ERROR_TTL // 400/401/402/403/404/422 → durable
+  return ERROR_TTL // réseau / inconnu → transitoire
+}
 
 // --- Helpers de validité ("donnée valide") ---------------------------------
 export function isValidLatestPrice(d: unknown): boolean {
@@ -60,19 +100,8 @@ export function isValidPriceTarget(d: unknown): boolean {
   const t = d as PriceTarget
   return t.targetMean != null || t.targetMedian != null || t.targetHigh != null || t.targetLow != null
 }
-export function isValidFundamentals(d: unknown): boolean {
-  if (!d) return false
-  const f = d as CompanyFundamentals
-  return [
-    f.marketCapitalization,
-    f.peNormalizedAnnual,
-    f.peBasicExclExtraTTM,
-    f.epsBasicExclExtraItemsTTM,
-    f.dividendYieldIndicatedAnnual,
-    f.beta,
-    f.week52High,
-    f.week52Low,
-  ].some((v) => v != null)
+export function isValidNextEarnings(d: unknown): boolean {
+  return !!d && typeof (d as { date?: unknown }).date === 'string' && (d as { date: string }).date !== ''
 }
 
 const VALIDATORS: Record<DataCapability, (d: unknown) => boolean> = {
@@ -84,7 +113,7 @@ const VALIDATORS: Record<DataCapability, (d: unknown) => boolean> = {
   PRICE_TARGET: isValidPriceTarget,
   RECOMMENDATION_TRENDS: isValidArray,
   NEWS: isValidArray,
-  FUNDAMENTALS: isValidFundamentals,
+  NEXT_EARNINGS: isValidNextEarnings,
 }
 
 // --- Stockage (mémoire + LocalStorage) -------------------------------------
@@ -213,7 +242,7 @@ export async function fetchWithFallback<T>(
           status: 'HIT',
           data,
           fetchedAt: now.toISOString(),
-          expiresAt: new Date(now.getTime() + CACHE_TTL[capability]).toISOString(),
+          expiresAt: new Date(now.getTime() + ttlFor(capability)).toISOString(),
         })
         return { data, source: provider.name }
       }
@@ -226,10 +255,11 @@ export async function fetchWithFallback<T>(
         status: 'EMPTY',
         data: null,
         fetchedAt: now.toISOString(),
-        expiresAt: new Date(now.getTime() + CACHE_TTL[capability]).toISOString(),
+        expiresAt: new Date(now.getTime() + ttlFor(capability)).toISOString(),
       })
     } catch (err) {
-      // Erreur contrôlée → cache court, pas de nouvel appel avant ERROR_TTL.
+      // Erreur contrôlée → TTL court (transitoire) ou long (permanent, cf. #2).
+      const message = err instanceof Error ? err.message : String(err)
       setCachedResult<T>({
         key,
         provider: provider.name,
@@ -237,8 +267,8 @@ export async function fetchWithFallback<T>(
         status: 'ERROR',
         data: null,
         fetchedAt: now.toISOString(),
-        expiresAt: new Date(now.getTime() + ERROR_TTL).toISOString(),
-        errorMessage: err instanceof Error ? err.message : String(err),
+        expiresAt: new Date(now.getTime() + errorTtlFor(message)).toISOString(),
+        errorMessage: message,
       })
     }
   }
