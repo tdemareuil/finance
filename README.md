@@ -31,7 +31,9 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
 - Import **Fortuneo** : instantané `.xls` (positions → achat au **PRU réel**) **ou** historique
   `.csv` des opérations (achats/ventes/coupons/taxes, encodage Windows-1252 géré)
 - Import **Trade Republic** (CSV de transactions) : reconnu automatiquement, historique réel
-  (dépôts/retraits, achats/ventes, dividendes, intérêts, frais), ISIN → rapprochement d'actifs
+  (dépôts/retraits, achats/ventes, dividendes, intérêts, frais), ISIN → rapprochement d'actifs.
+  Les actifs créés à l'import sont enrichis de leur **secteur et pays** (API gratuite Finnhub
+  `profile2`, repli FMP ; secteurs traduits en français, pays via `Intl.DisplayNames`)
 - **Thème sombre par défaut** (bascule clair/sombre dans la barre supérieure, persistée)
 - Calcul des positions : quantité, **PRU** (prix de revient moyen pondéré), coût d'acquisition,
   plus-values latente et réalisée, dividendes, frais

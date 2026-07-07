@@ -789,14 +789,19 @@ export async function executeImport(
         let exchange: string | undefined
         let finnhubSymbol: string | undefined
         let tradingViewSymbol: string | undefined
-        if (!ticker) {
-          const resolved = await resolveSymbol(a.isin, a.name).catch(() => null)
-          if (resolved) {
+        let sector: string | undefined
+        let country: string | undefined
+        // On résout toujours (même avec un ticker) pour récupérer secteur/pays.
+        const resolved = await resolveSymbol(a.isin, a.name).catch(() => null)
+        if (resolved) {
+          if (!ticker) {
             ticker = resolved.ticker
             exchange = resolved.exchange
             finnhubSymbol = resolved.finnhubSymbol
             tradingViewSymbol = resolved.tradingViewSymbol
           }
+          sector = resolved.sector
+          country = resolved.country
         }
 
         const created = await createAsset({
@@ -807,6 +812,8 @@ export async function executeImport(
           exchange,
           finnhubSymbol,
           tradingViewSymbol,
+          sector,
+          country,
           currency: a.currency,
           type: 'STOCK',
         })
