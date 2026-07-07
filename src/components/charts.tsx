@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -16,6 +17,7 @@ import {
 } from 'recharts'
 import type { ValuePoint } from '../services/portfolioCalculator'
 import type { BenchmarkPoint } from '../services/benchmarkService'
+import { getEurUsdSeries, type FxSeries } from '../services/marketDataService'
 import { formatMoney, formatMonth, type AllocationSlice, type MonthlyPoint } from '../utils'
 
 // ===========================================================================
@@ -194,6 +196,76 @@ export function AllocationPie({ data }: { data: AllocationSlice[] }) {
           <Legend />
         </PieChart>
       </ResponsiveContainer>
+    </div>
+  )
+}
+
+// --- Cours EUR/USD ---------------------------------------------------------
+const COLOR_FX = '#06b6d4'
+
+/** Graphe du cours EUR/USD (USD pour 1 EUR) sur ~1 an. Se charge tout seul. */
+export function EurUsdChart() {
+  const [series, setSeries] = useState<FxSeries | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    const to = new Date().toISOString().slice(0, 10)
+    const fromDate = new Date()
+    fromDate.setFullYear(fromDate.getFullYear() - 1)
+    const from = fromDate.toISOString().slice(0, 10)
+    let cancelled = false
+    getEurUsdSeries(from, to)
+      .then((s) => {
+        if (!cancelled) setSeries(s)
+      })
+      .catch(() => {
+        if (!cancelled) setError(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (error) return <p className="muted">Cours EUR/USD indisponible.</p>
+  if (!series) return <p className="muted">Chargement du cours EUR/USD…</p>
+  if (series.points.length === 0) return <p className="muted">Aucune donnée EUR/USD.</p>
+
+  const last = series.points[series.points.length - 1]
+  const fmtRate = (v: number) => v.toFixed(4)
+
+  return (
+    <div className="chart-container">
+      <ResponsiveContainer width="100%" height={240}>
+        <AreaChart data={series.points} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gFx" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={COLOR_FX} stopOpacity={0.35} />
+              <stop offset="100%" stopColor={COLOR_FX} stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis dataKey="date" tickFormatter={formatMonth} minTickGap={24} stroke="var(--text-muted)" fontSize={12} />
+          <YAxis
+            domain={['auto', 'auto']}
+            tickFormatter={(v: number) => v.toFixed(3)}
+            stroke="var(--text-muted)"
+            fontSize={12}
+            width={48}
+          />
+          <Tooltip
+            formatter={(v: number) => [fmtRate(v), 'EUR/USD']}
+            labelFormatter={(l) => formatMonth(l as string)}
+            contentStyle={tooltipStyle}
+            itemStyle={tooltipItemStyle}
+            labelStyle={tooltipLabelStyle}
+          />
+          <Area type="monotone" dataKey="rate" stroke={COLOR_FX} strokeWidth={2} fill="url(#gFx)" name="EUR/USD" />
+        </AreaChart>
+      </ResponsiveContainer>
+      <p className="muted small">
+        1 € = {fmtRate(last.rate)} $ au {formatMonth(last.date)}
+        {series.source === 'MOCK' && ' · données fictives (aucune clé de marché configurée)'}
+      </p>
     </div>
   )
 }

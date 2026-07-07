@@ -317,6 +317,32 @@ export function getMockHistoricalPrices(
   return out
 }
 
+/**
+ * Série déterministe du cours EUR/USD (USD pour 1 EUR) entre deux dates.
+ * Marche aléatoire douce et bornée autour de ~1,08 (précision 4 décimales),
+ * utilisée en repli lorsqu'aucune clé de données de marché n'est configurée.
+ */
+export function getMockEurUsd(from: string, to: string): { date: string; rate: number }[] {
+  const rand = seededRandom(hashString('EURUSD-fx'))
+  const start = new Date(from)
+  const end = new Date(to)
+  const totalDays = Math.max(1, daysBetween(start, end))
+  const out: { date: string; rate: number }[] = []
+  let rate = 1.08
+  for (let i = 0; i <= totalDays; i++) {
+    const d = new Date(start)
+    d.setDate(start.getDate() + i)
+    const dow = d.getDay()
+    if (dow === 0 || dow === 6) continue // marché fermé le week-end
+    // Rappel vers 1,08 (retour à la moyenne) + petit choc quotidien.
+    const meanReversion = (1.08 - rate) * 0.02
+    const shock = (rand() - 0.5) * 2 * 0.004
+    rate = Math.min(1.16, Math.max(1.0, rate + meanReversion + shock))
+    out.push({ date: toISODate(d), rate: Math.round(rate * 10000) / 10000 })
+  }
+  return out
+}
+
 /** Dernier prix connu (aujourd'hui) pour un symbole. */
 export function getMockLatestPrice(symbol: string, today: string): MockPricePoint {
   // On régénère sur ~2 ans pour obtenir un prix "actuel" cohérent.

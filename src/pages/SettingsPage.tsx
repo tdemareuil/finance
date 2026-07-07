@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { Card } from '../components/ui'
+import { EurUsdChart } from '../components/charts'
 import { isEodhdConfigured, isFmpConfigured, marketDataMode } from '../services/marketDataService'
 import { isFinnhubConfigured } from '../services/analysisService'
 import { clearDemoData, seedDemoData } from '../services/localStore'
@@ -88,6 +89,8 @@ export default function SettingsPage() {
         <p className="muted small">
           Les montants en USD sont convertis en EUR via un taux de change fixe simplifié (prototype).
         </p>
+        <h3 className="alloc-title" style={{ marginTop: 16 }}>Cours EUR/USD (1 an)</h3>
+        <EurUsdChart />
       </Card>
 
       {user?.isDemo && (
