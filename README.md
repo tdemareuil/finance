@@ -25,7 +25,10 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
 - **Gestion des comptes et actifs** (CRUD, taux des livrets, symboles TradingView/Finnhub/EODHD)
   regroupée dans **Paramètres** ; les opérations de bourse s'importent par CSV, les **grants RSU**
   et **versements sur livrets** se saisissent via le menu **« + »** et s'éditent/suppriment depuis
-  la fiche du titre ou la gestion des comptes
+  la fiche du titre ou la gestion des comptes. La création de comptes est **anti-doublon** : un
+  compte est identifié par **(type, nom)** — le nom encode la banque (« Livret A Fortuneo »), donc
+  un même type dans une autre banque reste un compte distinct. Un même type + même banque est
+  réutilisé (jamais dupliqué), garanti côté app **et** par un index unique en base
 - Import CSV (ouvert via un bouton depuis le Portefeuille) : aperçu, détection d'erreurs et de
   doublons, création automatique des comptes/actifs manquants, `ImportBatch`
 - Import **Fortuneo** : instantané `.xls` (positions → achat au **PRU réel**) **ou** historique
@@ -101,7 +104,8 @@ npm install
      [`migration_account_interest_rate.sql`](supabase/migration_account_interest_rate.sql) (colonne `interest_rate`),
      [`migration_transaction_external_id.sql`](supabase/migration_transaction_external_id.sql) (dédup `external_id` + index unique),
      [`migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql) (table `rsu_grants` + RLS),
-     [`migration_account_types.sql`](supabase/migration_account_types.sql) (types de compte Livret A / LDDS / PER / PEE).
+     [`migration_account_types.sql`](supabase/migration_account_types.sql) (types de compte Livret A / LDDS / PER / PEE),
+     [`migration_accounts_unique.sql`](supabase/migration_accounts_unique.sql) (index unique anti-doublon sur `(user_id, type, nom)`).
 4. Créez votre utilisateur dans *Authentication → Users → Add user* (il n'y a pas d'inscription
    en libre-service dans l'app). Laissez le provider **Email** activé ; pour tester rapidement,
    vous pouvez désactiver la confirmation email (*Authentication → Sign In / Providers → Confirm email*).

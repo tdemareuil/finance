@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { usePortfolio } from '../context/PortfolioContext'
 import { useAuth } from '../context/AuthContext'
 import { Card, EmptyState, Modal } from './ui'
-import { createAccount, deleteAccount, updateAccount } from '../services/accountService'
+import { createAccount, deleteAccount, isSameAccount, updateAccount } from '../services/accountService'
 import type { Account, AccountType, Currency } from '../types'
 import { ACCOUNT_TYPE_LABEL, formatMoney } from '../utils'
 import { computeCash, computeLivretInterest, isInterestBearing } from '../services/portfolioCalculator'
@@ -48,6 +48,16 @@ export default function AccountsManager() {
       type: fd.get('type') as AccountType,
       currency: fd.get('currency') as Currency,
       interestRate: rate != null && Number.isFinite(rate) ? rate : undefined,
+    }
+    // Refus des doublons : même type + même nom (le nom encode la banque).
+    // Un même type dans une autre banque (nom différent) reste autorisé.
+    const duplicate = accounts.find(
+      (a) => a.id !== editing?.id && isSameAccount(a, payload),
+    )
+    if (duplicate) {
+      setError(`Un compte « ${duplicate.name} » (${duplicate.type}) existe déjà.`)
+      setBusy(false)
+      return
     }
     try {
       if (editing) await updateAccount(editing.id, payload)

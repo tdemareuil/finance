@@ -23,6 +23,12 @@ create table if not exists public.accounts (
   created_at    timestamptz not null default now()
 );
 
+-- Empêche les doublons de comptes : un compte est identifié par (utilisateur,
+-- type, nom). Le nom encode la banque (« Livret A Fortuneo »), donc un même type
+-- dans une autre banque a un nom différent et reste autorisé.
+create unique index if not exists uq_accounts_user_type_name
+  on public.accounts (user_id, type, lower(btrim(name)));
+
 -- ---------------------------------------------------------------------
 -- assets
 -- ---------------------------------------------------------------------
