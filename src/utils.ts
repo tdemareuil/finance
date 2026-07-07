@@ -83,6 +83,14 @@ export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   PEE: 'PEE',
 }
 
+/** Comptes-titres (détiennent des actifs cotés importés par CSV). */
+export const SECURITIES_ACCOUNT_TYPES: AccountType[] = ['CTO', 'PEA']
+
+/** Un compte d'épargne (livret / plan) : son solde EST l'actif, pas de titres. */
+export function isSavingsAccount(type: AccountType): boolean {
+  return !SECURITIES_ACCOUNT_TYPES.includes(type)
+}
+
 export type RiskLevel = 'Faible' | 'Modéré' | 'Élevé'
 export const RISK_ORDER: RiskLevel[] = ['Faible', 'Modéré', 'Élevé']
 

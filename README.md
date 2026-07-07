@@ -37,9 +37,10 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
   plus-values latente et réalisée, dividendes, frais
 - Performance globale et annualisée, comparaison avec un benchmark **MSCI World**
 - Page unique **Portefeuille** (tableau de bord + positions fusionnés, page par défaut) : synthèse,
-  évolution du patrimoine vs benchmark, liste **« Mes titres »** groupée au choix par
-  **compte / type / niveau de risque**, et allocations (compte / type / devise / secteur / pays)
-  regroupées dans une seule tuile
+  évolution du patrimoine vs benchmark, liste **« Mes actifs »** (titres **et** livrets/plans
+  d'épargne, dont le solde constitue l'actif) groupée au choix par **compte / type / niveau de
+  risque** — les livrets se rangent sous le type **« Livrets »** et le risque **Faible** —, et
+  allocations (compte / type / devise / secteur / pays) regroupées dans une seule tuile
 - Depuis le Portefeuille : bouton **« 📥 Importer un CSV »** puis un menu **« + »** pour la saisie
   manuelle — **grant RSU** ou **versement/retrait** sur un livret ou plan d'épargne (Livret A, LDDS,
   Livret+, PER, PEE). Les achats/ventes de bourse passent uniquement par l'import CSV

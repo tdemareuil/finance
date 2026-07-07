@@ -178,8 +178,15 @@ export default function PortfolioPage() {
             <ValueChart valueSeries={valueSeries} benchmarkSeries={benchmarkSeries} />
           </Card>
 
-          <Card title="Mes titres">
-            <HoldingsGrouped positions={positions} />
+          <Card title="Mes actifs">
+            <HoldingsGrouped
+              positions={positions}
+              accounts={accounts}
+              transactions={transactions}
+              totalValue={s.totalValue}
+              userId={user!.id}
+              onChanged={reload}
+            />
           </Card>
 
           {open.length > 0 && (
