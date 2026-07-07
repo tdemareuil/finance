@@ -123,6 +123,26 @@ async function fetchFmpEurUsd(from: string, to: string): Promise<FxPoint[] | nul
     .sort((a, b) => (a.date < b.date ? -1 : 1))
 }
 
+/**
+ * Dernier cours EUR/USD connu (USD pour 1 EUR), ou null si indisponible.
+ * S'appuie sur la série récente (donc sur le cache 12 h et les mêmes providers).
+ */
+export async function getLatestEurUsd(): Promise<number | null> {
+  // Même fenêtre que le graphe EUR/USD (1 an) → partage du cache 12 h et
+  // cohérence garantie entre la dernière valeur affichée et le cours utilisé.
+  const to = new Date().toISOString().slice(0, 10)
+  const fromDate = new Date()
+  fromDate.setFullYear(fromDate.getFullYear() - 1)
+  const from = fromDate.toISOString().slice(0, 10)
+  try {
+    const series = await getEurUsdSeries(from, to)
+    const last = series.points.at(-1)
+    return last && last.rate > 0 ? last.rate : null
+  } catch {
+    return null
+  }
+}
+
 /** Série EUR/USD entre deux dates (ISO). Cache 12 h ; repli mock déterministe. */
 export async function getEurUsdSeries(from: string, to: string): Promise<FxSeries> {
   const key = `${from}_${to}`

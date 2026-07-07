@@ -51,6 +51,7 @@ export default function PortfolioPage() {
     positions,
     accounts,
     assets,
+    fx,
     reload,
   } = usePortfolio()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -85,7 +86,7 @@ export default function PortfolioPage() {
   const open = positions.filter((p) => p.quantity > 0)
   // Mode « Net d'impôts » : on retranche l'impôt estimé des gains (les livrets
   // sont exonérés). Les pertes ne génèrent pas de crédit d'impôt.
-  const tax = computeTaxOnGains(positions)
+  const tax = computeTaxOnGains(positions, fx)
   const unrealizedPnL = netOfTax ? s.unrealizedPnL - tax.onUnrealized : s.unrealizedPnL
   const realizedPnL = netOfTax ? s.realizedPnL - tax.onRealized : s.realizedPnL
   const dividendsReceived = netOfTax ? s.dividendsReceived - tax.onDividends : s.dividendsReceived
@@ -105,7 +106,7 @@ export default function PortfolioPage() {
   // Soldes d'épargne (livrets, PER, PEE) intégrés aux camemberts d'allocation.
   const savingsAlloc: SavingsAllocItem[] = accounts
     .filter((a) => isSavingsAccount(a.type))
-    .map((a) => ({ accountName: a.name, accountType: a.type, value: computeSavingsBalance(a, transactions) }))
+    .map((a) => ({ accountName: a.name, accountType: a.type, value: computeSavingsBalance(a, transactions, fx) }))
     .filter((it) => it.value > 0)
   // Écart de perf vs benchmark (valeur finale).
   const lastValue = valueSeries.at(-1)?.totalValue ?? null
@@ -254,23 +255,23 @@ export default function PortfolioPage() {
               <div className="alloc-grid">
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par compte</h3>
-                  <AllocationPie data={allocationByAccount(open, savingsAlloc)} />
+                  <AllocationPie data={allocationByAccount(open, savingsAlloc, fx)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par type d'actif</h3>
-                  <AllocationPie data={allocationByType(open, savingsAlloc)} />
+                  <AllocationPie data={allocationByType(open, savingsAlloc, fx)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par devise</h3>
-                  <AllocationPie data={allocationByCurrency(open, savingsAlloc)} />
+                  <AllocationPie data={allocationByCurrency(open, savingsAlloc, fx)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par secteur</h3>
-                  <AllocationPie data={allocationBySector(open, savingsAlloc)} />
+                  <AllocationPie data={allocationBySector(open, savingsAlloc, fx)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par pays</h3>
-                  <AllocationPie data={allocationByCountry(open, savingsAlloc)} />
+                  <AllocationPie data={allocationByCountry(open, savingsAlloc, fx)} />
                 </div>
               </div>
             </Card>

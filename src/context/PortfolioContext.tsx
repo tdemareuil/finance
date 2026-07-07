@@ -24,6 +24,7 @@ import { listTransactions } from '../services/transactionService'
 import { listDividendEvents } from '../services/dividendService'
 import {
   getHistoricalPrices,
+  getLatestEurUsd,
   getLatestPrice,
   marketDataMode,
 } from '../services/marketDataService'
@@ -31,6 +32,9 @@ import {
   computePositions,
   computeSummary,
   computeValueSeries,
+  DEFAULT_FX,
+  fxFromEurUsd,
+  type FxTable,
   type ValuePoint,
 } from '../services/portfolioCalculator'
 import {
@@ -52,6 +56,8 @@ interface PortfolioContextValue {
   dividendEvents: DividendEvent[]
 
   priceByAssetId: Record<string, number | null>
+  /** Table de change courante (EUR/USD réel si disponible, sinon défaut). */
+  fx: FxTable
   positions: Position[]
   summary: PortfolioSummary
   valueSeries: ValuePoint[]
@@ -95,6 +101,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [dividendEvents, setDividendEvents] = useState<DividendEvent[]>([])
 
   const [priceByAssetId, setPriceByAssetId] = useState<Record<string, number | null>>({})
+  const [fx, setFx] = useState<FxTable>(DEFAULT_FX)
   const [valueSeries, setValueSeries] = useState<ValuePoint[]>([])
   const [benchmarkSeries, setBenchmarkSeries] = useState<BenchmarkPoint[]>([])
 
@@ -127,6 +134,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         setAssets(ast)
         setTransactions(txs)
         setDividendEvents(divs)
+
+        // Taux de change EUR/USD réel (repli sur le défaut si indisponible).
+        const usdPerEur = await getLatestEurUsd()
+        if (reqId !== reqIdRef.current) return
+        const liveFx = fxFromEurUsd(usdPerEur)
+        setFx(liveFx)
 
         // Cours actuels (mock ou EODHD). Ne bloque pas l'app en cas d'échec.
         const prices: Record<string, number | null> = {}
@@ -171,7 +184,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
             const histByAsset: Record<string, MarketPrice[]> = {}
             for (const [id, series] of histEntries) histByAsset[id] = series
             if (reqId !== reqIdRef.current) return
-            setValueSeries(computeValueSeries(txs, ast, histByAsset, acc))
+            setValueSeries(computeValueSeries(txs, ast, histByAsset, acc, liveFx))
 
             const bench = await computeBenchmarkSeries(txs, benchmarkSymbol)
             if (reqId !== reqIdRef.current) return
@@ -212,13 +225,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   }, [user, load])
 
   const positions = useMemo(
-    () => computePositions(transactions, accounts, assets, priceByAssetId),
-    [transactions, accounts, assets, priceByAssetId],
+    () => computePositions(transactions, accounts, assets, priceByAssetId, fx),
+    [transactions, accounts, assets, priceByAssetId, fx],
   )
 
   const summary = useMemo(
-    () => (transactions.length ? computeSummary(positions, transactions, accounts) : EMPTY_SUMMARY),
-    [positions, transactions, accounts],
+    () => (transactions.length ? computeSummary(positions, transactions, accounts, fx) : EMPTY_SUMMARY),
+    [positions, transactions, accounts, fx],
   )
 
   const value: PortfolioContextValue = {
@@ -232,6 +245,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     transactions,
     dividendEvents,
     priceByAssetId,
+    fx,
     positions,
     summary,
     valueSeries,

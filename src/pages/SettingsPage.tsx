@@ -21,7 +21,8 @@ const BENCHMARKS = [
 
 export default function SettingsPage() {
   const { user, signOut, supabaseEnabled: sbEnabled } = useAuth()
-  const { benchmarkSymbol, setBenchmarkSymbol, reload } = usePortfolio()
+  const { benchmarkSymbol, setBenchmarkSymbol, reload, fx } = usePortfolio()
+  const usdPerEur = fx.USD > 0 ? 1 / fx.USD : null
   const navigate = useNavigate()
 
   async function handleSignOut() {
@@ -87,7 +88,8 @@ export default function SettingsPage() {
           <li><span>Devise d'affichage des agrégats</span><strong>EUR</strong></li>
         </ul>
         <p className="muted small">
-          Les montants en USD sont convertis en EUR via un taux de change fixe simplifié (prototype).
+          Les montants en USD sont convertis en EUR au cours actuel
+          {usdPerEur ? ` (1 € = ${usdPerEur.toFixed(4)} $)` : ''}, actualisé automatiquement.
         </p>
         <h3 className="alloc-title" style={{ marginTop: 16 }}>Cours EUR/USD (1 an)</h3>
         <EurUsdChart />

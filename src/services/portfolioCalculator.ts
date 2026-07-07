@@ -59,6 +59,15 @@ export function toEur(amount: number, currency: Currency, fx: FxTable = DEFAULT_
   return amount * (fx[currency] ?? 1)
 }
 
+/**
+ * Construit une table de change à partir du cours EUR/USD (USD pour 1 EUR).
+ * 1 USD vaut 1/cours EUR. Repli sur la valeur par défaut si le cours est absent.
+ */
+export function fxFromEurUsd(usdPerEur: number | null | undefined): FxTable {
+  if (usdPerEur && usdPerEur > 0) return { EUR: 1, USD: 1 / usdPerEur }
+  return { ...DEFAULT_FX }
+}
+
 function key(assetId: string, accountId: string): string {
   return `${assetId}::${accountId}`
 }
