@@ -8,7 +8,7 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
 
 > ⚠️ **Prototype.** Aucune donnée réelle ni clé API n'est présente dans le dépôt.
 > L'application fonctionne immédiatement en **mode démo** (données fictives locales), et
-> bascule sur Supabase + EODHD dès que les variables d'environnement sont renseignées.
+> bascule sur Supabase + Twelve Data / FMP dès que les variables d'environnement sont renseignées.
 
 ## Stack
 
@@ -16,13 +16,13 @@ livrets/plans d'épargne se saisissent manuellement, le tout stocké dans **Supa
 - **Supabase** (Auth + PostgreSQL avec Row Level Security)
 - **Recharts** pour les graphiques internes
 - **TradingView Widget** pour le graphique détaillé d'un actif (mode région, thème sombre)
-- **EODHD** pour les données de marché (cours, historiques, dividendes) — avec repli mock
+- **Twelve Data** (principal) puis **FMP** pour les données de marché (cours, historiques, dividendes) — avec repli mock
 - **GitHub Pages** pour le déploiement
 
 ## Fonctionnalités
 
 - Authentification email/mot de passe (Supabase), sessions persistantes, routes protégées
-- **Gestion des comptes et actifs** (CRUD, taux des livrets, symboles TradingView/Finnhub/EODHD)
+- **Gestion des comptes et actifs** (CRUD, taux des livrets, symboles TradingView/Finnhub)
   regroupée dans **Paramètres** ; les opérations de bourse s'importent par CSV, les **grants RSU**
   et **versements sur livrets** se saisissent via le menu **« + »** et s'éditent/suppriment depuis
   la fiche du titre ou la gestion des comptes. La création de comptes est **anti-doublon** : un
@@ -106,7 +106,7 @@ npm install
      [`migration_rsu_grants.sql`](supabase/migration_rsu_grants.sql) (table `rsu_grants` + RLS),
      [`migration_account_types.sql`](supabase/migration_account_types.sql) (types de compte Livret A / LDDS / PER / PEE),
      [`migration_accounts_unique.sql`](supabase/migration_accounts_unique.sql) (index unique anti-doublon sur `(user_id, type, nom)`),
-     [`migration_asset_columns.sql`](supabase/migration_asset_columns.sql) (garantit les colonnes `sector`, `country`, `trading_view_symbol`, `eodhd_symbol`, `finnhub_symbol` sur `assets` — nécessaire si l'import crée de nouveaux actifs enrichis).
+     [`migration_asset_columns.sql`](supabase/migration_asset_columns.sql) (garantit les colonnes `sector`, `country`, `trading_view_symbol`, `finnhub_symbol` sur `assets` — nécessaire si l'import crée de nouveaux actifs enrichis).
 4. Créez votre utilisateur dans *Authentication → Users → Add user* (il n'y a pas d'inscription
    en libre-service dans l'app). Laissez le provider **Email** activé ; pour tester rapidement,
    vous pouvez désactiver la confirmation email (*Authentication → Sign In / Providers → Confirm email*).
@@ -123,12 +123,12 @@ VITE_SUPABASE_URL=https://votre-projet.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxxxxxxxxxxxxxxxxxxx
 
 # --- Données de marché / analyse (optionnel : vide = données mock déterministes) ---
-VITE_EODHD_API_KEY=          # cours, historiques, dividendes (eodhd.com)
-VITE_FINNHUB_API_KEY=        # analyse : consensus, objectifs, news, fondamentaux (finnhub.io)
-VITE_FMP_API_KEY=            # fallback marché + analyse (site.financialmodelingprep.com)
+VITE_TWELVE_DATA_API_KEY=    # marché principal : cours + historiques (twelvedata.com)
+VITE_FMP_API_KEY=            # marché (fallback) + analyse (principal) : dividendes, consensus… (financialmodelingprep.com)
+VITE_FINNHUB_API_KEY=        # fallback marché + analyse : cours, consensus, news, fondamentaux (finnhub.io)
 
 # --- Divers (optionnel) ---
-VITE_DEFAULT_BENCHMARK=CW8.PA   # benchmark MSCI World (symbole EODHD)
+VITE_DEFAULT_BENCHMARK=CW8.PA   # benchmark MSCI World (symbole FMP)
 VITE_LOGIN_EMAIL=               # si renseigné, le login ne demande que le mot de passe
 # VITE_BASE=/                   # base URL du build (défaut : /<nom-du-repo>/ ; voir vite.config.ts)
 ```
@@ -137,9 +137,9 @@ VITE_LOGIN_EMAIL=               # si renseigné, le login ne demande que le mot 
 |---|---|---|
 | `VITE_SUPABASE_URL` | oui (persistance) | URL du projet Supabase |
 | `VITE_SUPABASE_PUBLISHABLE_KEY` | oui (persistance) | Clé **Publishable** (`sb_publishable_…`) |
-| `VITE_EODHD_API_KEY` | non | Clé EODHD (cours) ; **vide = mode mock** |
-| `VITE_FINNHUB_API_KEY` | non | Clé Finnhub (analyse) ; **vide = mode mock** |
-| `VITE_FMP_API_KEY` | non | Clé Financial Modeling Prep (**fallback** marché + analyse) ; vide = désactivé |
+| `VITE_TWELVE_DATA_API_KEY` | non | Clé Twelve Data (**marché principal** : cours + historiques) ; vide = repli FMP |
+| `VITE_FMP_API_KEY` | non | Clé Financial Modeling Prep (**marché fallback + analyse principale**) ; **vide = mode mock** |
+| `VITE_FINNHUB_API_KEY` | non | Clé Finnhub (**fallback marché + analyse**) ; vide = repli mock |
 | `VITE_DEFAULT_BENCHMARK` | non | Symbole benchmark (défaut `CW8.PA`) |
 | `VITE_LOGIN_EMAIL` | non | Email pré-rempli (login mono-utilisateur : seul le mot de passe est demandé) |
 | `VITE_BASE` | non | Base URL du build (défaut `/<nom-du-repo>/`) |
@@ -178,8 +178,8 @@ déploie à chaque push sur `main`.
 
 1. Dans *Settings → Pages*, choisissez **Source: GitHub Actions**.
 2. Dans *Settings → Secrets and variables → Actions*, ajoutez les secrets
-   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, et éventuellement `VITE_EODHD_API_KEY`
-   et `VITE_FINNHUB_API_KEY`. (Optionnel : variable `VITE_DEFAULT_BENCHMARK`.)
+   `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, et éventuellement `VITE_TWELVE_DATA_API_KEY`,
+   `VITE_FMP_API_KEY` et `VITE_FINNHUB_API_KEY`. (Optionnel : variable `VITE_DEFAULT_BENCHMARK`.)
 3. Poussez sur `main`. `VITE_BASE` est renseigné automatiquement avec `/<nom-du-repo>/`.
 
 > Le routing utilise `HashRouter` (`/#/portfolio`) : aucune configuration serveur SPA
@@ -317,13 +317,15 @@ les providers via `fetchWithFallback` (`src/services/apiCacheService.ts`).
 
 | Service | Ordre des providers |
 |---|---|
-| `marketDataService` (cours, historique, dividendes, splits) | **EODHD → FMP → Mock** |
-| `analysisService` (consensus, objectifs, tendances, news, fondamentaux) | **Finnhub → FMP → Mock** |
+| `marketDataService` (cours, historique, dividendes, splits) | **Twelve Data → FMP → Finnhub → Mock** |
+| `analysisService` (consensus, objectifs, tendances, news, fondamentaux) | **FMP → Finnhub → Mock** |
 
-**Financial Modeling Prep (FMP)** est un provider **secondaire** (fallback) : ajoutez
-`VITE_FMP_API_KEY` (clé gratuite sur [financialmodelingprep.com](https://site.financialmodelingprep.com))
-pour l'activer. Sans clé, FMP est ignoré silencieusement. FMP n'est appelé que si le provider
-principal (EODHD ou Finnhub) n'a rien renvoyé de valide pour la donnée demandée.
+**Twelve Data** est le provider de marché **principal** (cours + historiques) : ajoutez
+`VITE_TWELVE_DATA_API_KEY` (clé gratuite sur [twelvedata.com](https://twelvedata.com)). **FMP** est le
+provider de marché de **fallback** et le provider d'analyse **principal** ; **Finnhub** complète en
+**fallback** (cours via `/quote`, analyse). Le service passe automatiquement au provider suivant si
+la clé est absente ou si le **quota est atteint** (erreur 429 mise en cache court). Sans aucune clé,
+l'app bascule sur le **mock** déterministe.
 
 **Capabilities** : chaque provider déclare ce qu'il sait fournir (`LATEST_PRICE`,
 `HISTORICAL_PRICES`, `DIVIDENDS`, `SPLITS`, `ANALYST_CONSENSUS`, `PRICE_TARGET`,
@@ -355,18 +357,18 @@ capacité qu'il ne supporte pas.
 | Fundamentals | 24 h |
 | Erreurs contrôlées | 1 h |
 
-La **source réellement utilisée** est affichée discrètement (« Source : Finnhub / FMP / EODHD /
-données de démonstration »). Un fallback réussi n'affiche jamais d'erreur.
+La **source réellement utilisée** est affichée discrètement (« Source : Twelve Data / FMP /
+Finnhub / données de démonstration »). Un fallback réussi n'affiche jamais d'erreur.
 
 ## 10. Limites connues du prototype
 
-- **Change EUR/USD fixe** : les montants USD sont convertis en EUR via un taux constant
-  simplifié (`portfolioCalculator.ts`), pas de taux historique.
+- **Change EUR/USD** : conversion au **cours actuel** (récupéré via FMP, repli mock), appliqué
+  uniformément — pas de taux historique par date.
 - **Benchmark approché** : la courbe MSCI World simule l'investissement des mêmes flux
   de trésorerie nets (dépôts/retraits) dans l'ETF, aux cours historiques.
 - **Séries de valeur** : échantillonnées en fin de mois pour les graphiques.
-- **Données de marché mock** : déterministes mais fictives ; branchez EODHD pour du réel.
-  L'app n'est jamais bloquée si EODHD échoue (repli automatique sur le mock).
+- **Données de marché mock** : déterministes mais fictives ; branchez FMP pour du réel.
+  L'app n'est jamais bloquée si FMP échoue (repli automatique sur le mock).
 - **Données d'analyse (Finnhub)** : sans clé, données mock déterministes. Les objectifs de cours
   sont souvent réservés au plan payant ; les données analystes peuvent manquer pour les ETF et
   petites capitalisations. `marketDataService` et `analysisService` restent strictement séparés.
@@ -475,7 +477,7 @@ Réimporter le même fichier, ou des fichiers qui se chevauchent, **ne crée jam
 - Éventuel passage à `@tanstack/react-query` (staleTime alignés sur les TTL) si l'app grossit.
 - Garder l'état de l'onglet Analyse monté (aujourd'hui remonté au changement d'onglet, mais servi
   instantanément par le cache).
-- Champ `fmpSymbol` dédié sur l'`Asset` (actuellement FMP réutilise finnhub/eodhd/ticker).
+- Champ `fmpSymbol` dédié sur l'`Asset` (actuellement FMP réutilise finnhub/ticker).
 
 ## Structure du projet
 
@@ -501,7 +503,7 @@ src/
                    instrumentSearchService, symbolLookupService,
                    marketDataService, analysisService, apiCacheService, consensus,
                    portfolioCalculator, rsuCalculator, benchmarkService
-    providers/     types, eodhdProvider, finnhubProvider, fmpProvider, mockProvider
+    providers/     types, twelveDataProvider, finnhubProvider, fmpProvider, mockProvider
 supabase/          schema.sql (tables + RLS + policies) + migrations (finnhub_symbol,
                    account_interest_rate, transaction_external_id, rsu_grants)
 ```

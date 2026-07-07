@@ -23,9 +23,9 @@ const FMP_KEY = (import.meta.env.VITE_FMP_API_KEY as string | undefined)?.trim()
 const V3 = 'https://financialmodelingprep.com/api/v3'
 const V4 = 'https://financialmodelingprep.com/api/v4'
 
-/** FMP utilise des suffixes proches d'EODHD/Finnhub (.PA, .AS, .DE…). */
+/** FMP utilise des suffixes proches de Finnhub (.PA, .AS, .DE…). */
 function symbolFor(asset: Asset): string {
-  return asset.finnhubSymbol?.trim() || asset.eodhdSymbol?.trim() || asset.ticker.trim()
+  return asset.finnhubSymbol?.trim() || asset.ticker.trim()
 }
 
 async function getJson<T>(url: string): Promise<T> {

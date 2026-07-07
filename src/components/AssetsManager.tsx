@@ -9,7 +9,7 @@ import { formatMoney } from '../utils'
 
 const TYPE_LABEL: Record<AssetType, string> = { STOCK: 'Action', ETF: 'ETF', CASH: 'Cash' }
 
-// Gestion des actifs (CRUD + symboles TradingView/Finnhub/EODHD) — section Paramètres.
+// Gestion des actifs (CRUD + symboles TradingView/Finnhub) — section Paramètres.
 export default function AssetsManager() {
   const { user } = useAuth()
   const { assets, transactions, priceByAssetId, reload } = usePortfolio()
@@ -52,7 +52,6 @@ export default function AssetsManager() {
       type: fd.get('type') as AssetType,
       sector: str('sector'),
       country: str('country'),
-      eodhdSymbol: str('eodhdSymbol'),
       tradingViewSymbol: str('tradingViewSymbol'),
       finnhubSymbol: str('finnhubSymbol'),
     }
@@ -137,7 +136,6 @@ export default function AssetsManager() {
             </label>
             <label className="field"><span>Secteur</span><input name="sector" defaultValue={c?.sector ?? ''} placeholder="Technologie" /></label>
             <label className="field"><span>Pays</span><input name="country" defaultValue={c?.country ?? ''} placeholder="États-Unis" /></label>
-            <label className="field"><span>Symbole EODHD</span><input name="eodhdSymbol" defaultValue={c?.eodhdSymbol ?? ''} placeholder="AAPL.US" /></label>
             <label className="field"><span>Symbole TradingView</span><input name="tradingViewSymbol" defaultValue={c?.tradingViewSymbol ?? ''} placeholder="NASDAQ:AAPL" /></label>
             <label className="field"><span>Symbole Finnhub</span><input name="finnhubSymbol" defaultValue={c?.finnhubSymbol ?? ''} placeholder="AAPL, MC.PA…" /></label>
             {error && <div className="alert alert-error form-span-2">{error}</div>}

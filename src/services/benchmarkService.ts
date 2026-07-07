@@ -23,7 +23,9 @@ export function buildBenchmarkAsset(symbol: string): Asset {
     exchange: symbol.split('.')[1],
     currency,
     type: 'ETF',
-    eodhdSymbol: symbol,
+    // FMP et le mock résolvent le symbole via finnhubSymbol (sinon le ticker) :
+    // on fournit le symbole complet (ex. « CW8.PA ») pour l'interrogation.
+    finnhubSymbol: symbol,
     createdAt: new Date().toISOString(),
   }
 }

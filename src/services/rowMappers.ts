@@ -54,7 +54,6 @@ export function rowToAsset(r: Record<string, any>): Asset {
     sector: r.sector ?? undefined,
     country: r.country ?? undefined,
     tradingViewSymbol: r.trading_view_symbol ?? undefined,
-    eodhdSymbol: r.eodhd_symbol ?? undefined,
     finnhubSymbol: r.finnhub_symbol ?? undefined,
     createdAt: r.created_at,
   }
@@ -73,7 +72,6 @@ export function assetToRow(a: Partial<Asset>): Record<string, unknown> {
     sector: a.sector,
     country: a.country,
     trading_view_symbol: a.tradingViewSymbol,
-    eodhd_symbol: a.eodhdSymbol,
     finnhub_symbol: a.finnhubSymbol,
   })
 }

@@ -35,7 +35,7 @@ jobs:
           # Secrets à configurer dans Settings > Secrets and variables > Actions.
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
-          VITE_EODHD_API_KEY: ${{ secrets.VITE_EODHD_API_KEY }}
+          VITE_TWELVE_DATA_API_KEY: ${{ secrets.VITE_TWELVE_DATA_API_KEY }}
           VITE_FINNHUB_API_KEY: ${{ secrets.VITE_FINNHUB_API_KEY }}
           VITE_FMP_API_KEY: ${{ secrets.VITE_FMP_API_KEY }}
           VITE_LOGIN_EMAIL: ${{ secrets.VITE_LOGIN_EMAIL }}

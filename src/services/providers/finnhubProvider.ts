@@ -4,6 +4,7 @@ import type {
   Asset,
   CompanyFundamentals,
   CompanyNewsItem,
+  MarketPrice,
 } from '../../types'
 import type { CacheParams, DataCapability, DataProvider } from './types'
 import { computeRating } from '../consensus'
@@ -140,5 +141,36 @@ export const finnhubProvider: DataProvider = {
       default:
         return null
     }
+  },
+}
+
+// ---------------------------------------------------------------------------
+// FinnhubMarketDataProvider — cours temps réel (endpoint /quote gratuit).
+// Sert de fallback marché (après Twelve Data et FMP). L'historique de cours
+// (/stock/candle) étant réservé au plan payant, seul LATEST_PRICE est déclaré.
+// ---------------------------------------------------------------------------
+
+const MARKET_CAPS: DataCapability[] = ['LATEST_PRICE']
+
+export const finnhubMarketDataProvider: DataProvider = {
+  name: 'finnhub',
+  capabilities: MARKET_CAPS,
+  isEnabled: () => Boolean(FINNHUB_KEY),
+  symbolFor,
+
+  async fetch(capability: DataCapability, asset: Asset): Promise<unknown> {
+    if (capability !== 'LATEST_PRICE') return null
+    const symbol = symbolFor(asset)
+    // /quote : { c: cours courant, ... }. c = 0 ⇒ symbole inconnu.
+    const json = await getJson<{ c?: number }>(`${BASE}/quote?symbol=${encodeURIComponent(symbol)}`)
+    const close = typeof json.c === 'number' ? json.c : NaN
+    if (!Number.isFinite(close) || close <= 0) return null
+    const mp: MarketPrice = {
+      assetId: asset.id,
+      date: new Date().toISOString().slice(0, 10),
+      close,
+      currency: asset.currency,
+    }
+    return mp
   },
 }

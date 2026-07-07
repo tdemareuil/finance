@@ -11,25 +11,25 @@ import { computeRating } from './consensus'
 import type { DataProvider, SourcedResult } from './providers/types'
 import { finnhubProvider } from './providers/finnhubProvider'
 import { fmpAnalysisProvider } from './providers/fmpProvider'
-import { mockAnalysisProvider } from './providers/mockProvider'
 
 // ---------------------------------------------------------------------------
 // analysisService — consensus, objectifs de cours, tendances, news, fondamentaux.
-// Orchestrateur multi-provider. Ordre de fallback : Finnhub → FMP → Mock.
+// Orchestrateur multi-provider. Ordre de fallback : FMP → Finnhub.
+// AUCUN repli mock : une donnée indisponible reste vide (jamais fictive).
 // STRICTEMENT séparé de marketDataService.
 // ---------------------------------------------------------------------------
 
-const ANALYSIS_PROVIDERS: DataProvider[] = [finnhubProvider, fmpAnalysisProvider, mockAnalysisProvider]
+const ANALYSIS_PROVIDERS: DataProvider[] = [fmpAnalysisProvider, finnhubProvider]
 
-export const isFinnhubConfigured = finnhubProvider.isEnabled()
 export const isFmpConfigured = fmpAnalysisProvider.isEnabled()
+export const isFinnhubConfigured = finnhubProvider.isEnabled()
 
-export type AnalysisMode = 'FINNHUB' | 'FMP' | 'MOCK'
-export const analysisMode: AnalysisMode = isFinnhubConfigured
-  ? 'FINNHUB'
-  : isFmpConfigured
-    ? 'FMP'
-    : 'MOCK'
+export type AnalysisMode = 'FMP' | 'FINNHUB' | 'NONE'
+export const analysisMode: AnalysisMode = isFmpConfigured
+  ? 'FMP'
+  : isFinnhubConfigured
+    ? 'FINNHUB'
+    : 'NONE'
 
 export { computeRating }
 

@@ -68,7 +68,9 @@ export default function Layout() {
         </nav>
         <div className="sidebar-footer">
           {user?.isDemo && <span className="badge badge-demo">Mode démo</span>}
-          <span className="badge badge-market">Marché : {marketMode === 'EODHD' ? 'EODHD' : 'mock'}</span>
+          <span className="badge badge-market">
+            Marché : {marketMode === 'TWELVE_DATA' ? 'Twelve Data' : marketMode === 'FMP' ? 'FMP' : marketMode === 'FINNHUB' ? 'Finnhub' : 'indisponible'}
+          </span>
           <button className="btn btn-ghost btn-sm" onClick={handleSignOut}>
             Se déconnecter
           </button>

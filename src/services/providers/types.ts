@@ -18,7 +18,7 @@ export type DataCapability =
   | 'NEWS'
   | 'FUNDAMENTALS'
 
-export type ProviderName = 'eodhd' | 'finnhub' | 'fmp' | 'mock'
+export type ProviderName = 'twelvedata' | 'finnhub' | 'fmp'
 
 /** Paramètres additionnels d'un appel (from/to/resolution…), sérialisés dans la clé de cache. */
 export type CacheParams = Record<string, string | number | boolean | undefined>
@@ -36,7 +36,7 @@ export interface ProviderCapabilityMap {
 export interface DataProvider {
   name: ProviderName
   capabilities: DataCapability[]
-  /** true si le provider est utilisable (clé API présente ; mock toujours true). */
+  /** true si le provider est utilisable (clé API présente). */
   isEnabled: () => boolean
   /** Symbole propre au provider (déterministe) — sert aussi à construire la clé de cache. */
   symbolFor: (asset: Asset) => string
@@ -51,14 +51,12 @@ export interface SourcedResult<T> {
 
 export function providerLabel(source: ProviderName | 'none'): string {
   switch (source) {
-    case 'eodhd':
-      return 'EODHD'
+    case 'twelvedata':
+      return 'Twelve Data'
     case 'finnhub':
       return 'Finnhub'
     case 'fmp':
       return 'FMP'
-    case 'mock':
-      return 'données de démonstration'
     default:
       return '—'
   }

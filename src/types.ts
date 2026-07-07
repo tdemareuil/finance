@@ -43,7 +43,6 @@ export interface Asset {
   sector?: string
   country?: string
   tradingViewSymbol?: string
-  eodhdSymbol?: string
   finnhubSymbol?: string
   createdAt: string
 }

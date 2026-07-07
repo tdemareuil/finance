@@ -141,7 +141,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         const liveFx = fxFromEurUsd(usdPerEur)
         setFx(liveFx)
 
-        // Cours actuels (mock ou EODHD). Ne bloque pas l'app en cas d'échec.
+        // Cours actuels (Twelve Data → FMP → Finnhub). Ne bloque pas l'app en cas d'échec.
         const prices: Record<string, number | null> = {}
         setMarketError(null)
         await Promise.all(

@@ -108,7 +108,6 @@ export default function AssetAnalysis({
   const isEtf = asset.type === 'ETF'
   const noFinnhubSymbol = !asset.finnhubSymbol?.trim()
   const usedSources = [...new Set(sources.filter((s) => s !== 'none'))] as ProviderName[]
-  const anyMock = usedSources.includes('mock')
   const noAnalysisKey = !isFinnhubConfigured && !isFmpConfigured
 
   const potential =
@@ -285,7 +284,6 @@ export default function AssetAnalysis({
           </Card>
 
           <p className="muted small disclaimer">
-            {anyMock ? 'Certaines données sont simulées. ' : ''}
             Données informatives uniquement, ne constituent pas un conseil financier.
           </p>
         </>

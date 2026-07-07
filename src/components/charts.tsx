@@ -264,7 +264,6 @@ export function EurUsdChart() {
       </ResponsiveContainer>
       <p className="muted small">
         1 € = {fmtRate(last.rate)} $ au {formatMonth(last.date)}
-        {series.source === 'MOCK' && ' · données fictives (aucune clé de marché configurée)'}
       </p>
     </div>
   )

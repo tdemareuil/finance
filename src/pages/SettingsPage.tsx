@@ -3,14 +3,60 @@ import { useAuth } from '../context/AuthContext'
 import { usePortfolio } from '../context/PortfolioContext'
 import { Card } from '../components/ui'
 import { EurUsdChart } from '../components/charts'
-import { isEodhdConfigured, isFmpConfigured, marketDataMode } from '../services/marketDataService'
-import { isFinnhubConfigured } from '../services/analysisService'
+import { isTwelveDataConfigured, isFmpConfigured, marketDataMode } from '../services/marketDataService'
+import { analysisMode, isFinnhubConfigured } from '../services/analysisService'
 import { clearDemoData, seedDemoData } from '../services/localStore'
 
-const MODE_LABEL: Record<string, string> = {
-  EODHD: 'EODHD (temps réel)',
-  FMP: 'FMP (fallback)',
-  MOCK: 'Mock (données fictives)',
+// Chaînes de providers, dans l'ordre de priorité réel des services.
+interface ProviderStep {
+  key: string
+  name: string
+  configured: boolean
+}
+const MARKET_CHAIN: ProviderStep[] = [
+  { key: 'TWELVE_DATA', name: 'Twelve Data', configured: isTwelveDataConfigured },
+  { key: 'FMP', name: 'FMP', configured: isFmpConfigured },
+  { key: 'FINNHUB', name: 'Finnhub', configured: isFinnhubConfigured },
+]
+const ANALYSIS_CHAIN: ProviderStep[] = [
+  { key: 'FMP', name: 'FMP', configured: isFmpConfigured },
+  { key: 'FINNHUB', name: 'Finnhub', configured: isFinnhubConfigured },
+]
+
+/** Affiche une chaîne de providers, numérotée dans l'ordre de priorité. */
+function ProviderChain({
+  title,
+  subtitle,
+  steps,
+  activeKey,
+}: {
+  title: string
+  subtitle: string
+  steps: ProviderStep[]
+  activeKey: string
+}) {
+  return (
+    <div className="provider-service">
+      <h3 className="alloc-title">{title}</h3>
+      <p className="muted small provider-subtitle">{subtitle}</p>
+      <ol className="provider-chain">
+        {steps.map((s, i) => {
+          const active = s.key === activeKey && s.configured
+          const role = active ? 'utilisé' : s.configured ? 'en secours' : 'clé absente'
+          return (
+            <li key={s.key} className={`provider-step${active ? ' active' : ''}${s.configured ? '' : ' off'}`}>
+              <span className="provider-rank">{i + 1}</span>
+              <span className="provider-name">{s.name}</span>
+              <span className={`chip ${s.configured ? 'chip-ok' : 'chip-default'}`}>
+                {s.configured ? 'Détectée' : 'Absente'}
+              </span>
+              <span className="provider-role muted small">{role}</span>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
 }
 
 const BENCHMARKS = [
@@ -55,17 +101,27 @@ export default function SettingsPage() {
       </Card>
 
       <Card title="Providers de données">
-        <ul className="kv-list">
-          <li><span>Données de marché (source principale)</span><strong>{MODE_LABEL[marketDataMode]}</strong></li>
-          <li><span>EODHD (marché)</span><strong>{isEodhdConfigured ? 'Détectée' : 'Absente'}</strong></li>
-          <li><span>Finnhub (analyse)</span><strong>{isFinnhubConfigured ? 'Détectée' : 'Absente'}</strong></li>
-          <li><span>FMP (fallback marché + analyse)</span><strong>{isFmpConfigured ? 'Détectée' : 'Absente'}</strong></li>
-        </ul>
+        <p className="muted small" style={{ marginTop: 0 }}>
+          Chaque service interroge ses providers <strong>dans l'ordre</strong> et s'arrête au premier qui
+          répond. Bascule automatique au suivant si la clé est absente ou le quota atteint.{' '}
+          <strong>Aucun repli fictif</strong> : une donnée indisponible reste vide, jamais inventée.
+        </p>
+        <div className="providers-grid">
+          <ProviderChain
+            title="Données de marché"
+            subtitle="cours, historiques, dividendes"
+            steps={MARKET_CHAIN}
+            activeKey={marketDataMode}
+          />
+          <ProviderChain
+            title="Analyse"
+            subtitle="consensus, objectifs, news, fondamentaux"
+            steps={ANALYSIS_CHAIN}
+            activeKey={analysisMode}
+          />
+        </div>
         <p className="muted small">
-          Ordre de fallback — marché : EODHD → FMP → mock ; analyse : Finnhub → FMP → mock.
-          Les clés se renseignent dans <code>.env.local</code> (jamais committées). Sans clé, des données
-          fictives déterministes sont utilisées. Les résultats (y compris vides) sont mis en cache pour
-          éviter les appels répétés.
+          Les clés se renseignent dans <code>.env.local</code> (jamais committées).
         </p>
       </Card>
 
