@@ -185,20 +185,19 @@ export default function CsvImportPage() {
             />
           </label>
         </div>
-        <p className="muted small">Le format est reconnu automatiquement.</p>
+        <p className="muted small">Le format est reconnu automatiquement. Formats possibles :</p>
+        <ul className="muted small">
+          <li>
+            <strong>Fortuneo</strong> : l'export « portefeuille détaillé » (.xls) est reconnu
+            automatiquement ; chaque position devient un achat au PRU (instantané). L'« historique
+            des opérations » (.csv) est aussi reconnu.
+          </li>
+          <li>
+            <strong>Trade Republic</strong> : l'export CSV de transactions est reconnu automatiquement ;
+            chaque ligne (dépôt, achat/vente, dividende, intérêt, frais) devient une opération datée.
+          </li>
+        </ul>
         {busy && !preview && <p className="muted">Lecture du fichier…</p>}
-      </Card>
-
-      {/* Formats reconnus automatiquement */}
-      <Card title="Formats possibles">
-        <p className="muted small">
-          <strong>Fortuneo</strong> : l'export « portefeuille détaillé » (.xls) est reconnu
-          automatiquement ; chaque position devient un achat au PRU (instantané). L'« historique
-          des opérations » (.csv) est aussi reconnu.
-          <br />
-          <strong>Trade Republic</strong> : l'export CSV de transactions est reconnu automatiquement ;
-          chaque ligne (dépôt, achat/vente, dividende, intérêt, frais) devient une opération datée.
-        </p>
       </Card>
 
       {/* Preset broker (Fortuneo / Trade Republic) : bandeau explicatif */}
