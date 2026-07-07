@@ -11,7 +11,7 @@ import {
   signClass,
   type RiskLevel,
 } from '../utils'
-import { computeCash, computeLivretInterest, isInterestBearing } from '../services/portfolioCalculator'
+import { computeCash, computeSavingsBalance, isInterestBearing } from '../services/portfolioCalculator'
 import { getConsensus } from '../services/analysisService'
 import CashLineModal from './CashLineModal'
 
@@ -75,20 +75,6 @@ interface Group {
 function savingsTypeGroup(type: AccountType): [string, string] {
   if (isInterestBearing(type)) return ['LIVRETS', 'Livrets'] // Livret A, LDDS, Livret+
   return [type, ACCOUNT_TYPE_LABEL[type]] // PER, PEE
-}
-
-/** Solde d'un compte d'épargne = cash net (+ intérêts si porteur d'intérêts). */
-function savingsBalance(acc: Account, txs: Transaction[]): number {
-  const accTx = txs.filter((t) => t.accountId === acc.id)
-  const cash = computeCash(accTx)
-  if (isInterestBearing(acc.type) && acc.interestRate) {
-    const flows = accTx
-      .filter((t) => t.type === 'DEPOSIT' || t.type === 'WITHDRAWAL')
-      .map((t) => ({ date: t.date, amount: (t.type === 'DEPOSIT' ? 1 : -1) * (t.amount ?? 0) }))
-    const i = computeLivretInterest(flows, acc.interestRate)
-    return cash + i.credited + i.accrued
-  }
-  return cash
 }
 
 function buildGroups(holdings: Holding[], mode: GroupMode): Group[] {
@@ -219,7 +205,7 @@ export default function HoldingsGrouped({
       // Espèces d'un compte-titres : plancher à 0 (un achat sans versement ne
       // crée pas un solde négatif — cohérent avec le patrimoine total).
       const balance = savings
-        ? savingsBalance(a, transactions)
+        ? computeSavingsBalance(a, transactions)
         : Math.max(0, computeCash(transactions.filter((t) => t.accountId === a.id)))
       const [typeKey, typeLabel] = savings
         ? savingsTypeGroup(a.type)

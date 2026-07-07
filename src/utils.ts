@@ -1,5 +1,5 @@
 import type { AccountType, Asset, Currency, Position, Transaction } from './types'
-import { DEFAULT_FX, toEur, type FxTable } from './services/portfolioCalculator'
+import { DEFAULT_FX, toEur, isInterestBearing, type FxTable } from './services/portfolioCalculator'
 
 // ===========================================================================
 // Utilitaires transverses : formatage, thème, risque, erreurs, agrégations.
@@ -165,19 +165,75 @@ function allocationBy(positions: Position[], keyFn: (p: Position) => string, fx:
   return [...map.entries()].map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
 }
 
-export function allocationByAccount(positions: Position[], fx: FxTable = DEFAULT_FX): AllocationSlice[] {
-  return allocationBy(positions, (p) => p.account.name, fx)
+/** Solde d'épargne à intégrer aux allocations (livrets, PER, PEE). */
+export interface SavingsAllocItem {
+  accountName: string
+  accountType: AccountType
+  value: number
 }
-export function allocationByType(positions: Position[], fx: FxTable = DEFAULT_FX): AllocationSlice[] {
+
+/** Ajoute les soldes d'épargne aux tranches d'allocation, sous une clé donnée. */
+function withSavings(
+  base: AllocationSlice[],
+  savings: SavingsAllocItem[],
+  keyFn: (s: SavingsAllocItem) => string,
+): AllocationSlice[] {
+  const map = new Map(base.map((s) => [s.name, s.value]))
+  for (const it of savings) {
+    if (it.value <= 0) continue
+    const k = keyFn(it)
+    map.set(k, (map.get(k) ?? 0) + it.value)
+  }
+  return [...map.entries()].map(([name, value]) => ({ name, value: Math.round(value * 100) / 100 }))
+}
+
+export function allocationByAccount(
+  positions: Position[],
+  savings: SavingsAllocItem[] = [],
+  fx: FxTable = DEFAULT_FX,
+): AllocationSlice[] {
+  return withSavings(allocationBy(positions, (p) => p.account.name, fx), savings, (s) => s.accountName)
+}
+export function allocationByType(
+  positions: Position[],
+  savings: SavingsAllocItem[] = [],
+  fx: FxTable = DEFAULT_FX,
+): AllocationSlice[] {
   const label: Record<string, string> = { STOCK: 'Action', ETF: 'ETF', CASH: 'Cash' }
-  return allocationBy(positions, (p) => label[p.asset.type] ?? p.asset.type, fx)
+  return withSavings(
+    allocationBy(positions, (p) => label[p.asset.type] ?? p.asset.type, fx),
+    savings,
+    (s) => (isInterestBearing(s.accountType) ? 'Livrets' : ACCOUNT_TYPE_LABEL[s.accountType]),
+  )
 }
-export function allocationByCurrency(positions: Position[], fx: FxTable = DEFAULT_FX): AllocationSlice[] {
-  return allocationBy(positions, (p) => p.currency, fx)
+export function allocationByCurrency(
+  positions: Position[],
+  savings: SavingsAllocItem[] = [],
+  fx: FxTable = DEFAULT_FX,
+): AllocationSlice[] {
+  return withSavings(allocationBy(positions, (p) => p.currency, fx), savings, () => 'EUR')
 }
-export function allocationBySector(positions: Position[], fx: FxTable = DEFAULT_FX): AllocationSlice[] {
-  return allocationBy(positions, (p) => p.asset.sector ?? 'Non renseigné', fx)
+export function allocationBySector(
+  positions: Position[],
+  savings: SavingsAllocItem[] = [],
+  fx: FxTable = DEFAULT_FX,
+): AllocationSlice[] {
+  // Livrets → « Livrets » ; PER/PEE → supposés diversifiés.
+  return withSavings(
+    allocationBy(positions, (p) => p.asset.sector ?? 'Non renseigné', fx),
+    savings,
+    (s) => (isInterestBearing(s.accountType) ? 'Livrets' : 'Diversifié'),
+  )
 }
-export function allocationByCountry(positions: Position[], fx: FxTable = DEFAULT_FX): AllocationSlice[] {
-  return allocationBy(positions, (p) => p.asset.country ?? 'Non renseigné', fx)
+export function allocationByCountry(
+  positions: Position[],
+  savings: SavingsAllocItem[] = [],
+  fx: FxTable = DEFAULT_FX,
+): AllocationSlice[] {
+  // Livrets → « Livrets » ; PER/PEE → supposés français.
+  return withSavings(
+    allocationBy(positions, (p) => p.asset.country ?? 'Non renseigné', fx),
+    savings,
+    (s) => (isInterestBearing(s.accountType) ? 'Livrets' : 'France'),
+  )
 }

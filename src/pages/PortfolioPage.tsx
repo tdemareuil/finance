@@ -14,8 +14,11 @@ import {
   allocationByCurrency,
   allocationBySector,
   allocationByType,
+  isSavingsAccount,
+  type SavingsAllocItem,
 } from '../utils'
 import { formatMoney, formatPct, signClass } from '../utils'
+import { computeSavingsBalance } from '../services/portfolioCalculator'
 import type { AccountType } from '../types'
 
 // Opérations saisissables manuellement (le menu « + »). Les opérations de
@@ -72,6 +75,11 @@ export default function PortfolioPage() {
 
   const s = summary
   const open = positions.filter((p) => p.quantity > 0)
+  // Soldes d'épargne (livrets, PER, PEE) intégrés aux camemberts d'allocation.
+  const savingsAlloc: SavingsAllocItem[] = accounts
+    .filter((a) => isSavingsAccount(a.type))
+    .map((a) => ({ accountName: a.name, accountType: a.type, value: computeSavingsBalance(a, transactions) }))
+    .filter((it) => it.value > 0)
   // Écart de perf vs benchmark (valeur finale).
   const lastValue = valueSeries.at(-1)?.totalValue ?? null
   const lastBench = benchmarkSeries.at(-1)?.benchmark ?? null
@@ -196,28 +204,28 @@ export default function PortfolioPage() {
             </Card>
           )}
 
-          {open.length > 0 && (
+          {(open.length > 0 || savingsAlloc.length > 0) && (
             <Card title="Allocations">
               <div className="alloc-grid">
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par compte</h3>
-                  <AllocationPie data={allocationByAccount(open)} />
+                  <AllocationPie data={allocationByAccount(open, savingsAlloc)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par type d'actif</h3>
-                  <AllocationPie data={allocationByType(open)} />
+                  <AllocationPie data={allocationByType(open, savingsAlloc)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par devise</h3>
-                  <AllocationPie data={allocationByCurrency(open)} />
+                  <AllocationPie data={allocationByCurrency(open, savingsAlloc)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par secteur</h3>
-                  <AllocationPie data={allocationBySector(open)} />
+                  <AllocationPie data={allocationBySector(open, savingsAlloc)} />
                 </div>
                 <div className="alloc-item">
                   <h3 className="alloc-title">Par pays</h3>
-                  <AllocationPie data={allocationByCountry(open)} />
+                  <AllocationPie data={allocationByCountry(open, savingsAlloc)} />
                 </div>
               </div>
             </Card>

@@ -287,6 +287,24 @@ export function computeAllLivretInterest(
   return { credited: Math.round(credited * 100) / 100, accrued: Math.round(accrued * 100) / 100 }
 }
 
+/** Solde d'un compte d'épargne (EUR) = cash net (+ intérêts si porteur d'intérêts). */
+export function computeSavingsBalance(
+  account: Account,
+  transactions: Transaction[],
+  fx: FxTable = DEFAULT_FX,
+): number {
+  const accTx = transactions.filter((t) => t.accountId === account.id)
+  const cash = computeCash(accTx, fx)
+  if (isInterestBearing(account.type) && account.interestRate) {
+    const flows = accTx
+      .filter((t) => t.type === 'DEPOSIT' || t.type === 'WITHDRAWAL')
+      .map((t) => ({ date: t.date, amount: (t.type === 'DEPOSIT' ? 1 : -1) * (t.amount ?? 0) }))
+    const i = computeLivretInterest(flows, account.interestRate)
+    return cash + i.credited + i.accrued
+  }
+  return cash
+}
+
 /** Capital investi net (EUR) = dépôts − retraits. */
 export function computeInvestedCapital(transactions: Transaction[], fx: FxTable = DEFAULT_FX): number {
   let net = 0
